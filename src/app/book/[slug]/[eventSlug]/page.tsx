@@ -22,9 +22,12 @@ export default async function EventBookingPage({
     <main className="flex-1 mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
       <div>
         <Link href={`/book/${host.slug}`} className="text-sm text-blue-600 hover:underline">
-          ← {host.name}
+          ← All meeting types
         </Link>
-        <h1 className="text-2xl font-bold mt-1">{eventType.name}</h1>
+        <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          {host.name}
+        </p>
+        <h1 className="text-2xl font-bold">{eventType.name}</h1>
         <p className="text-gray-500">
           {eventType.duration_min} min
           {eventType.description && <> · {eventType.description}</>}
