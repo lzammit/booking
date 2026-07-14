@@ -59,6 +59,13 @@ export async function POST(req: NextRequest) {
       "INSERT INTO external_busy (host_id, source, start_utc, end_utc) VALUES (?, ?, ?, ?)"
     );
     for (const r of rows) ins.run(host.id, input.source, r.start, r.end);
+    // Heartbeat: recorded even when the calendar has no busy blocks, so the
+    // dashboard can tell "agent alive" from "agent gone".
+    db.prepare(
+      `INSERT INTO agent_syncs (host_id, source, last_sync, blocks)
+       VALUES (?, ?, datetime('now'), ?)
+       ON CONFLICT(host_id, source) DO UPDATE SET last_sync=datetime('now'), blocks=excluded.blocks`
+    ).run(host.id, input.source, rows.length);
   });
   tx();
 

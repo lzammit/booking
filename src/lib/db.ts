@@ -72,6 +72,13 @@ function createDb() {
       synced_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_external_busy_host ON external_busy(host_id, start_utc);
+    CREATE TABLE IF NOT EXISTS agent_syncs (
+      host_id INTEGER NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      last_sync TEXT NOT NULL DEFAULT (datetime('now')),
+      blocks INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (host_id, source)
+    );
   `);
   const hostCols = db.prepare("PRAGMA table_info(hosts)").all() as { name: string }[];
   if (!hostCols.some((c) => c.name === "api_token")) {

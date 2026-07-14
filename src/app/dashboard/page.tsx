@@ -25,10 +25,18 @@ export default async function DashboardPage() {
     .all(host.id, nowIso) as (Booking & { event_name: string })[];
   const msAccount = msAccountFor(host.id);
   const agentSync = db
-    .prepare(
-      "SELECT source, COUNT(*) AS n, MAX(synced_at) AS last FROM external_busy WHERE host_id = ? GROUP BY source"
-    )
-    .all(host.id) as { source: string; n: number; last: string }[];
+    .prepare("SELECT source, blocks, last_sync FROM agent_syncs WHERE host_id = ?")
+    .all(host.id) as { source: string; blocks: number; last_sync: string }[];
+  // Agent pushes every 5 minutes; >15 min silence means it's offline.
+  const agents = agentSync.map((s) => {
+    const last = DateTime.fromSQL(s.last_sync, { zone: "utc" });
+    return {
+      ...s,
+      connected: DateTime.utc().diff(last, "minutes").minutes < 15,
+      lastLabel: last.setZone(host.timezone).toFormat("LLL d, h:mm a"),
+      agoLabel: last.toRelative() ?? "",
+    };
+  });
   const eventTypeCount = (
     db.prepare("SELECT COUNT(*) AS c FROM event_types WHERE host_id = ? AND active = 1").get(host.id) as { c: number }
   ).c;
@@ -76,19 +84,31 @@ export default async function DashboardPage() {
       </section>
 
       <section className="rounded-xl border border-gray-200 p-4">
-        <h2 className="font-semibold">Local calendar agent</h2>
-        {agentSync.length === 0 ? (
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold">Local calendar agent</h2>
+          {agents.length > 0 &&
+            (agents.some((a) => a.connected) ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                Connected
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                Offline
+              </span>
+            ))}
+        </div>
+        {agents.length === 0 ? (
           <p className="text-sm text-gray-500">
             No agent has synced yet. Install the Mac agent and use the API token below.
           </p>
         ) : (
           <ul className="text-sm text-gray-600 mt-1">
-            {agentSync.map((s) => (
-              <li key={s.source}>
-                <span className="font-mono">{s.source}</span>: {s.n} busy blocks, last sync{" "}
-                {DateTime.fromSQL(s.last, { zone: "utc" })
-                  .setZone(host.timezone)
-                  .toFormat("LLL d, h:mm a")}
+            {agents.map((a) => (
+              <li key={a.source}>
+                <span className="font-mono">{a.source}</span>: {a.blocks} busy blocks · last
+                check-in {a.agoLabel} ({a.lastLabel})
               </li>
             ))}
           </ul>
