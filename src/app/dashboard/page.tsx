@@ -158,8 +158,9 @@ export default async function DashboardPage({
             Download Mac agent
           </a>
           <p className="text-xs text-gray-400">
-            Pre-configured with your token. Unzip, then right-click BookingAgent → Open
-            (first launch only) and allow Calendar access.
+            Pre-configured with your token. Unzip and open BookingAgent; when macOS blocks
+            it, click Done, then System Settings → Privacy &amp; Security → “Open Anyway”
+            (first launch only), and allow Calendar access.
           </p>
         </div>
         <details className="mt-2">
