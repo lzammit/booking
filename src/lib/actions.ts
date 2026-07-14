@@ -37,11 +37,19 @@ export async function signup(formData: FormData) {
     redirect("/signup?error=Invalid+invite+code");
   }
 
-  let slug = slugify(name) || "host";
+  // Prefer a personal slug: full name, then the email local part, then numbers.
   const slugTaken = db.prepare("SELECT 1 FROM hosts WHERE slug = ?");
-  let n = 2;
-  const base = slug;
-  while (slugTaken.get(slug)) slug = `${base}-${n++}`;
+  let slug = slugify(name) || "host";
+  if (slugTaken.get(slug)) {
+    const fromEmail = slugify(email.split("@")[0]);
+    if (fromEmail && !slugTaken.get(fromEmail)) {
+      slug = fromEmail;
+    } else {
+      const base = slug;
+      let n = 2;
+      while (slugTaken.get(slug)) slug = `${base}-${n++}`;
+    }
+  }
 
   const hash = bcrypt.hashSync(password, 10);
   let hostId: number;
@@ -120,6 +128,25 @@ export async function saveAvailability(formData: FormData) {
   });
   tx();
   redirect("/dashboard/availability?saved=1");
+}
+
+export async function updateSlug(formData: FormData) {
+  const host = await requireHost();
+  const slug = String(formData.get("slug") || "").toLowerCase().trim();
+  if (!/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/.test(slug)) {
+    redirect(
+      "/dashboard?error=" +
+        encodeURIComponent("Link must be 2-40 chars: letters, numbers, dashes")
+    );
+  }
+  const taken = db
+    .prepare("SELECT 1 FROM hosts WHERE slug = ? AND id != ?")
+    .get(slug, host.id);
+  if (taken) {
+    redirect("/dashboard?error=" + encodeURIComponent(`"${slug}" is already taken`));
+  }
+  db.prepare("UPDATE hosts SET slug = ? WHERE id = ?").run(slug, host.id);
+  redirect("/dashboard?saved=1");
 }
 
 export async function updateTimezone(formData: FormData) {

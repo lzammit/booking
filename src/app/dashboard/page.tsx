@@ -1,11 +1,17 @@
 import { DateTime } from "luxon";
 import db, { Booking, EventType } from "@/lib/db";
 import { requireHost } from "@/lib/session";
-import { cancelBookingAsHost, disconnectMicrosoft } from "@/lib/actions";
+import { cancelBookingAsHost, disconnectMicrosoft, updateSlug } from "@/lib/actions";
 import { msAccountFor, msConfigured } from "@/lib/msgraph";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; saved?: string }>;
+}) {
+  const { error, saved } = await searchParams;
   const host = await requireHost();
+  const appHost = (process.env.APP_URL || "").replace(/^https?:\/\//, "");
   const nowIso = DateTime.utc().toISO();
   const upcoming = db
     .prepare(
@@ -54,6 +60,37 @@ export default async function DashboardPage() {
           {eventTypeCount} active event type{eventTypeCount === 1 ? "" : "s"}
         </div>
       </div>
+
+      {error && (
+        <p className="rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
+          {error}
+        </p>
+      )}
+      {saved && (
+        <p className="rounded-md bg-green-50 border border-green-200 text-green-700 px-3 py-2 text-sm">
+          Saved.
+        </p>
+      )}
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Your booking link</h2>
+        <form action={updateSlug} className="mt-2 flex items-center gap-2 text-sm">
+          <span className="text-gray-500 font-mono">{appHost}/book/</span>
+          <input
+            name="slug"
+            defaultValue={host.slug}
+            pattern="[a-z0-9][a-z0-9-]{0,38}[a-z0-9]"
+            title="2-40 characters: lowercase letters, numbers, dashes"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 font-mono w-48"
+          />
+          <button className="rounded-lg border border-gray-300 px-4 py-1.5 hover:bg-gray-50">
+            Save
+          </button>
+        </form>
+        <p className="text-xs text-gray-400 mt-2">
+          Changing it breaks previously shared links — pick something and stick with it.
+        </p>
+      </section>
 
       <section className="rounded-xl border border-gray-200 p-4 flex items-center justify-between">
         <div>
