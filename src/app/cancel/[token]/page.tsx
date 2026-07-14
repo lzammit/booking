@@ -43,15 +43,16 @@ export default async function CancelPage({
 
   return (
     <main className="flex-1 flex items-center justify-center p-8">
-      <div className="w-full max-w-md rounded-xl border border-gray-200 p-6 space-y-4">
-        <h1 className="text-xl font-bold">
+      <div className="w-full max-w-md rounded-2xl border border-ink/10 bg-white p-8 space-y-4">
+        <div className="day-arc w-full" />
+        <h1 className="text-2xl font-semibold text-ink">
           {booking.status === "cancelled" ? "Booking cancelled" : "Cancel this booking?"}
         </h1>
-        <div className="text-sm text-gray-600 space-y-1">
+        <div className="text-sm text-ink/70 space-y-1">
           <p>
-            <span className="font-medium">{eventType.name}</span> with {host.name}
+            <span className="font-semibold text-ink">{eventType.name}</span> with {host.name}
           </p>
-          <p>{when}</p>
+          <p className="font-mono">{when}</p>
           <p>
             {booking.guest_name} · {booking.guest_email}
           </p>
@@ -59,13 +60,14 @@ export default async function CancelPage({
         {booking.status === "confirmed" ? (
           <form action={cancelAction}>
             <input type="hidden" name="token" value={token} />
-            <button className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-white font-medium hover:bg-red-700">
-              Cancel booking
+            <button className="w-full rounded-lg bg-ink px-4 py-2.5 font-semibold text-paper hover:opacity-90">
+              Cancel this booking
             </button>
           </form>
         ) : (
-          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2">
-            This booking has been cancelled.
+          <p className="text-sm text-ink/70 bg-paper border border-ink/10 rounded-md px-3 py-2">
+            This time is freed up. If you need a new one, book again from the
+            original link.
           </p>
         )}
       </div>

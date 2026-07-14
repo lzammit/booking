@@ -17,28 +17,46 @@ export default async function HostPage({
     .all(host.id) as EventType[];
 
   return (
-    <main className="flex-1 mx-auto w-full max-w-lg px-6 py-16 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">{host.name}</h1>
-        <p className="text-gray-500">Pick a meeting type to see available times.</p>
-      </div>
-      <ul className="space-y-3">
+    <main className="flex-1 mx-auto w-full max-w-xl px-6 py-20">
+      <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/50">
+        Book time with
+      </p>
+      <h1 className="mt-2 text-4xl sm:text-5xl font-semibold tracking-tight text-ink">
+        {host.name}
+      </h1>
+      <div className="day-arc mt-6 w-24" />
+      <p className="mt-6 text-ink/60">
+        Pick a meeting, then a time that suits you. Times are shown in your own
+        timezone.
+      </p>
+
+      <ul className="mt-10 space-y-3">
         {eventTypes.map((et) => (
           <li key={et.id}>
             <Link
               href={`/book/${host.slug}/${et.slug}`}
-              className="block rounded-xl border border-gray-200 p-4 hover:border-blue-400 hover:shadow-sm transition"
+              className="group flex items-baseline gap-5 rounded-xl border border-ink/10 bg-white px-6 py-5 transition hover:border-ink hover:shadow-[0_2px_0_0_var(--ink)]"
             >
-              <div className="font-semibold">{et.name}</div>
-              <div className="text-sm text-gray-500">
-                {et.duration_min} min
-                {et.description && <> · {et.description}</>}
-              </div>
+              <span className="font-mono text-2xl font-medium tabular-nums text-ink">
+                {et.duration_min}
+                <span className="ml-1 text-xs text-ink/40">min</span>
+              </span>
+              <span className="flex-1">
+                <span className="block font-semibold text-ink group-hover:underline underline-offset-4">
+                  {et.name}
+                </span>
+                {et.description && (
+                  <span className="block text-sm text-ink/50">{et.description}</span>
+                )}
+              </span>
+              <span aria-hidden className="text-ink/30 transition group-hover:translate-x-1 group-hover:text-ink">
+                →
+              </span>
             </Link>
           </li>
         ))}
         {eventTypes.length === 0 && (
-          <p className="text-gray-500">No bookable event types right now.</p>
+          <p className="text-ink/50">Nothing is open for booking right now.</p>
         )}
       </ul>
     </main>

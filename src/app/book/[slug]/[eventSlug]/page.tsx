@@ -19,26 +19,32 @@ export default async function EventBookingPage({
   if (!eventType) notFound();
 
   return (
-    <main className="flex-1 mx-auto w-full max-w-3xl px-6 py-12 space-y-6">
-      <div>
-        <Link href={`/book/${host.slug}`} className="text-sm text-blue-600 hover:underline">
-          ← All meeting types
-        </Link>
-        <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
-          {host.name}
-        </p>
-        <h1 className="text-2xl font-bold">{eventType.name}</h1>
-        <p className="text-gray-500">
-          {eventType.duration_min} min
-          {eventType.description && <> · {eventType.description}</>}
-        </p>
+    <main className="flex-1 mx-auto w-full max-w-3xl px-6 py-14">
+      <Link
+        href={`/book/${host.slug}`}
+        className="font-mono text-xs uppercase tracking-[0.15em] text-ink/50 hover:text-ink"
+      >
+        ← All meeting types
+      </Link>
+      <p className="mt-5 font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/50">
+        {host.name}
+      </p>
+      <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">
+        {eventType.name}
+      </h1>
+      <p className="mt-1 text-ink/60">
+        <span className="font-mono tabular-nums">{eventType.duration_min} min</span>
+        {eventType.description && <> · {eventType.description}</>}
+      </p>
+      <div className="day-arc mt-5 w-24" />
+      <div className="mt-8">
+        <BookingWidget
+          eventTypeId={eventType.id}
+          durationMin={eventType.duration_min}
+          windowDays={eventType.window_days}
+          hostName={host.name}
+        />
       </div>
-      <BookingWidget
-        eventTypeId={eventType.id}
-        durationMin={eventType.duration_min}
-        windowDays={eventType.window_days}
-        hostName={host.name}
-      />
     </main>
   );
 }
