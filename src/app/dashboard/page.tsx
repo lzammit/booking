@@ -158,8 +158,8 @@ export default async function DashboardPage({
             Download Mac agent
           </a>
           <p className="text-xs text-gray-400">
-            Pre-configured with your token: unzip, right-click{" "}
-            <span className="font-mono">Install BookingAgent.command</span> → Open.
+            Pre-configured with your token. Unzip, then right-click BookingAgent → Open
+            (first launch only) and allow Calendar access.
           </p>
         </div>
         <details className="mt-2">

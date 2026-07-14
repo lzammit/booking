@@ -13,31 +13,6 @@ import { currentHost } from "@/lib/session";
 const BASE_ZIP =
   process.env.AGENT_ZIP || "/opt/booking/agent/BookingAgent.app.zip";
 
-function installScript(appUrl: string, token: string): string {
-  return `#!/bin/bash
-# BookingAgent installer — personalized for your account.
-set -e
-cd "$(dirname "$0")"
-
-CONF_DIR="$HOME/Library/Application Support/BookingAgent"
-mkdir -p "$CONF_DIR"
-cat > "$CONF_DIR/config.json" <<EOF
-{ "appUrl": "${appUrl}", "token": "${token}", "days": 60 }
-EOF
-chmod 600 "$CONF_DIR/config.json"
-
-mkdir -p "$HOME/Applications"
-rm -rf "$HOME/Applications/BookingAgent.app"
-ditto BookingAgent.app "$HOME/Applications/BookingAgent.app"
-xattr -dr com.apple.quarantine "$HOME/Applications/BookingAgent.app" 2>/dev/null || true
-
-open "$HOME/Applications/BookingAgent.app"
-echo
-echo "BookingAgent installed. Click Allow when macOS asks for Calendar access."
-echo "Look for the calendar icon in your menu bar."
-`;
-}
-
 export async function GET(req: NextRequest) {
   let host = await currentHost();
   if (!host) {
@@ -59,12 +34,19 @@ export async function GET(req: NextRequest) {
   }
 
   const appUrl = process.env.APP_URL || `https://${req.nextUrl.host}`;
+  // Sidecar config next to the app: the agent imports it on first launch,
+  // so the download is install-and-go with no manual token entry.
   const zip = new AdmZip(BASE_ZIP);
-  const name = "Install BookingAgent.command";
-  zip.addFile(name, Buffer.from(installScript(appUrl, host.api_token), "utf-8"));
-  // addFile's attr param gets mangled; set the mode on the header so the
-  // script extracts executable and Finder can run it.
-  zip.getEntry(name)!.header.attr = (0o100755 << 16) >>> 0;
+  const name = "booking-config.json";
+  zip.addFile(
+    name,
+    Buffer.from(
+      JSON.stringify({ appUrl, token: host.api_token, days: 60 }),
+      "utf-8"
+    )
+  );
+  // addFile's attr param gets mangled; set the mode on the header.
+  zip.getEntry(name)!.header.attr = (0o100644 << 16) >>> 0;
 
   return new NextResponse(new Uint8Array(zip.toBuffer()), {
     headers: {

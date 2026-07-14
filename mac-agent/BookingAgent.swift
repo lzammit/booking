@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? SMAppService.mainApp.register() // start at login
         }
 
+        importSidecarConfigIfNeeded()
         if Config.load() == nil {
             promptForSettings(message: "Welcome! Paste your booking API token to get started.")
         }
@@ -65,6 +66,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.sync()
         }
         sync()
+    }
+
+    /// Personalized downloads ship a booking-config.json next to the app
+    /// bundle. Import it on first launch so no manual token entry is needed,
+    /// then delete it (it contains the API token).
+    private func importSidecarConfigIfNeeded() {
+        guard Config.load() == nil else { return }
+        let sidecar = Bundle.main.bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("booking-config.json")
+        guard let data = try? Data(contentsOf: sidecar),
+              let cfg = try? JSONDecoder().decode(Config.self, from: data),
+              !cfg.appUrl.isEmpty, !cfg.token.isEmpty
+        else { return }
+        cfg.save()
+        try? FileManager.default.removeItem(at: sidecar)
     }
 
     @objc private func syncNow() { sync() }
