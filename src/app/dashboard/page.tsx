@@ -157,11 +157,20 @@ export default async function DashboardPage({
           >
             Download Mac agent
           </a>
-          <p className="text-xs text-gray-400">
-            Pre-configured with your token. Unzip and open BookingAgent; when macOS blocks
-            it, click Done, then System Settings → Privacy &amp; Security → “Open Anyway”
-            (first launch only), and allow Calendar access.
-          </p>
+          <div className="text-xs text-gray-400 space-y-1">
+            <p>
+              Pre-configured with your token. Unzip and open BookingAgent; when macOS blocks
+              it, click Done, then System Settings → Privacy &amp; Security → “Open Anyway”
+              (first launch only), and allow Calendar access.
+            </p>
+            <p>
+              If “Open Anyway” is blocked (managed Macs), run this in Terminal, then open the
+              app again:{" "}
+              <code className="font-mono bg-gray-50 border border-gray-200 rounded px-1">
+                xattr -dr com.apple.quarantine ~/Downloads/BookingAgent*/BookingAgent.app
+              </code>
+            </p>
+          </div>
         </div>
         <details className="mt-2">
           <summary className="text-sm text-blue-600 cursor-pointer">Show API token</summary>
