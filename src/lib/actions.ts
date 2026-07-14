@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
@@ -47,9 +48,9 @@ export async function signup(formData: FormData) {
   try {
     const res = db
       .prepare(
-        "INSERT INTO hosts (email, name, slug, password_hash, timezone) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO hosts (email, name, slug, password_hash, timezone, api_token) VALUES (?, ?, ?, ?, ?, ?)"
       )
-      .run(email.toLowerCase(), name, slug, hash, timezone);
+      .run(email.toLowerCase(), name, slug, hash, timezone, randomBytes(24).toString("hex"));
     hostId = Number(res.lastInsertRowid);
   } catch {
     redirect("/signup?error=Email+already+registered");

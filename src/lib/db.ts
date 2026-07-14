@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { randomBytes } from "crypto";
 import path from "path";
 import fs from "fs";
 
@@ -62,7 +63,25 @@ function createDb() {
       refresh_token TEXT NOT NULL,
       expires_at INTEGER NOT NULL -- unix seconds
     );
+    CREATE TABLE IF NOT EXISTS external_busy (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      host_id INTEGER NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+      source TEXT NOT NULL, -- e.g. 'mac-eventkit'
+      start_utc TEXT NOT NULL,
+      end_utc TEXT NOT NULL,
+      synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_external_busy_host ON external_busy(host_id, start_utc);
   `);
+  const hostCols = db.prepare("PRAGMA table_info(hosts)").all() as { name: string }[];
+  if (!hostCols.some((c) => c.name === "api_token")) {
+    db.exec("ALTER TABLE hosts ADD COLUMN api_token TEXT");
+  }
+  const tokenless = db
+    .prepare("SELECT id FROM hosts WHERE api_token IS NULL OR api_token = ''")
+    .all() as { id: number }[];
+  const setToken = db.prepare("UPDATE hosts SET api_token = ? WHERE id = ?");
+  for (const h of tokenless) setToken.run(randomBytes(24).toString("hex"), h.id);
   return db;
 }
 
@@ -80,6 +99,7 @@ export interface Host {
   slug: string;
   password_hash: string;
   timezone: string;
+  api_token: string;
 }
 
 export interface EventType {

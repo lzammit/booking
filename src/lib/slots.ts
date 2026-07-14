@@ -48,6 +48,23 @@ export async function computeSlots(
   );
   busy.push(...(await getBusyIntervals(host.id, from.toUTC(), to.toUTC())));
 
+  // Busy intervals pushed by local calendar agents (e.g. the Mac EventKit agent).
+  const external = db
+    .prepare(
+      "SELECT start_utc, end_utc FROM external_busy WHERE host_id = ? AND end_utc > ? AND start_utc < ?"
+    )
+    .all(host.id, from.toUTC().toISO(), to.toUTC().toISO()) as {
+    start_utc: string;
+    end_utc: string;
+  }[];
+  for (const e of external) {
+    const iv = Interval.fromDateTimes(
+      DateTime.fromISO(e.start_utc),
+      DateTime.fromISO(e.end_utc)
+    );
+    if (iv.isValid) busy.push(iv);
+  }
+
   const durationMin = eventType.duration_min;
   const bufferMin = eventType.buffer_min;
   const slots: string[] = [];

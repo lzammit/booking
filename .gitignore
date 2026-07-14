@@ -43,3 +43,4 @@ node_modules/
 .next/
 data/
 .env
+mac-agent/BookingAgent.app/

@@ -24,6 +24,11 @@ export default async function DashboardPage() {
     )
     .all(host.id, nowIso) as (Booking & { event_name: string })[];
   const msAccount = msAccountFor(host.id);
+  const agentSync = db
+    .prepare(
+      "SELECT source, COUNT(*) AS n, MAX(synced_at) AS last FROM external_busy WHERE host_id = ? GROUP BY source"
+    )
+    .all(host.id) as { source: string; n: number; last: string }[];
   const eventTypeCount = (
     db.prepare("SELECT COUNT(*) AS c FROM event_types WHERE host_id = ? AND active = 1").get(host.id) as { c: number }
   ).c;
@@ -68,6 +73,32 @@ export default async function DashboardPage() {
               Connect
             </a>
           ))}
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Local calendar agent</h2>
+        {agentSync.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No agent has synced yet. Install the Mac agent and use the API token below.
+          </p>
+        ) : (
+          <ul className="text-sm text-gray-600 mt-1">
+            {agentSync.map((s) => (
+              <li key={s.source}>
+                <span className="font-mono">{s.source}</span>: {s.n} busy blocks, last sync{" "}
+                {DateTime.fromSQL(s.last, { zone: "utc" })
+                  .setZone(host.timezone)
+                  .toFormat("LLL d, h:mm a")}
+              </li>
+            ))}
+          </ul>
+        )}
+        <details className="mt-2">
+          <summary className="text-sm text-blue-600 cursor-pointer">Show API token</summary>
+          <code className="block mt-1 text-xs bg-gray-50 border border-gray-200 rounded-md p-2 break-all">
+            {host.api_token}
+          </code>
+        </details>
       </section>
 
       <section>
