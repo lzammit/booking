@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let urlField = NSTextField(frame: NSRect(x: 0, y: 58, width: 320, height: 24))
         urlField.placeholderString = "Server URL"
-        urlField.stringValue = existing?.appUrl ?? "http://139.177.196.42:3000"
+        urlField.stringValue = existing?.appUrl ?? "https://booking.packetfence.net"
         let tokenField = NSTextField(frame: NSRect(x: 0, y: 26, width: 320, height: 24))
         tokenField.placeholderString = "API token"
         tokenField.stringValue = existing?.token ?? ""

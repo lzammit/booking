@@ -25,9 +25,6 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
     <string>Reads your calendar busy times to block them on your booking page.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>Reads your calendar busy times to block them on your booking page.</string>
-    <!-- Temporary until the server has HTTPS -->
-    <key>NSAppTransportSecurity</key>
-    <dict><key>NSAllowsArbitraryLoads</key><true/></dict>
 </dict>
 </plist>
 EOF
