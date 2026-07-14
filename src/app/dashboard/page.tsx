@@ -150,6 +150,18 @@ export default async function DashboardPage({
             ))}
           </ul>
         )}
+        <div className="mt-3 flex items-center gap-3">
+          <a
+            href="/api/agent/download"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+          >
+            Download Mac agent
+          </a>
+          <p className="text-xs text-gray-400">
+            Pre-configured with your token: unzip, right-click{" "}
+            <span className="font-mono">Install BookingAgent.command</span> → Open.
+          </p>
+        </div>
         <details className="mt-2">
           <summary className="text-sm text-blue-600 cursor-pointer">Show API token</summary>
           <code className="block mt-1 text-xs bg-gray-50 border border-gray-200 rounded-md p-2 break-all">
