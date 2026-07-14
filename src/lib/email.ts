@@ -53,9 +53,10 @@ function buildIcs(
     `SUMMARY:${icsEscape(summary)}`,
     `DESCRIPTION:${icsEscape(`${booking.notes ? booking.notes + "\n\n" : ""}Cancel: ${cancelUrl}`)}`,
     `ORGANIZER;CN=${icsEscape(organizer.name)}:mailto:${organizer.email}`,
-    `ATTENDEE;CN=${icsEscape(attendee.name)};RSVP=TRUE:mailto:${attendee.email}`,
+    `ATTENDEE;CN=${icsEscape(attendee.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee.email}`,
+    "TRANSP:OPAQUE",
     `STATUS:${method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
-    ...(method === "CANCEL" ? ["SEQUENCE:1"] : []),
+    `SEQUENCE:${method === "CANCEL" ? 1 : 0}`,
     "END:VEVENT",
     "END:VCALENDAR",
   ];
@@ -92,10 +93,13 @@ export async function sendBookingEmails(
   // and the host as attendee. The guest's copy keeps host-as-organizer.
   const fromEmail = from.match(/<([^>]+)>/)?.[1] ?? from;
   const system: IcsParty = { name: "Booking", email: fromEmail };
+  // Sent via nodemailer's icalEvent so the calendar data rides as an inline
+  // text/calendar MIME part (like Webex/Outlook invites) — clients then
+  // auto-surface the meeting instead of showing a dead .ics attachment.
   const icsFor = (summary: string, organizer: IcsParty, attendee: IcsParty) => ({
     filename: kind === "confirmed" ? "invite.ics" : "cancel.ics",
+    method,
     content: buildIcs(booking, method, summary, organizer, attendee),
-    contentType: `text/calendar; method=${method}`,
   });
 
   const subjectBase = `${eventType.name} with ${host.name}`;
@@ -111,13 +115,11 @@ export async function sendBookingEmails(
         kind === "confirmed"
           ? `Hi ${booking.guest_name},\n\nYour booking is confirmed.\n\nWhat: ${subjectBase} (${eventType.duration_min} min)\nWhen: ${startGuest}\n\nNeed to cancel? ${cancelUrl}\n`
           : `Hi ${booking.guest_name},\n\nThis booking has been cancelled.\n\nWhat: ${subjectBase}\nWhen: ${startGuest}\n`,
-      attachments: [
-        icsFor(
-          subjectBase,
-          { name: host.name, email: host.email },
-          { name: booking.guest_name, email: booking.guest_email }
-        ),
-      ],
+      icalEvent: icsFor(
+        subjectBase,
+        { name: host.name, email: host.email },
+        { name: booking.guest_name, email: booking.guest_email }
+      ),
     }),
     t.sendMail({
       from,
@@ -127,9 +129,7 @@ export async function sendBookingEmails(
         kind === "confirmed"
           ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> booked "${eventType.name}".\n\nWhen: ${startHost}\nNotes: ${booking.notes || "(none)"}\n`
           : `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> — booking "${eventType.name}" on ${startHost} was cancelled.\n`,
-      attachments: [
-        icsFor(hostSummary, system, { name: host.name, email: host.email }),
-      ],
+      icalEvent: icsFor(hostSummary, system, { name: host.name, email: host.email }),
     }),
   ]);
   for (const r of results) {
