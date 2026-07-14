@@ -132,6 +132,7 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
           eventTypeId,
           start: selectedSlot,
           name: fd.get("name"),
+          company: fd.get("company"),
           email: fd.get("email"),
           notes: fd.get("notes") || "",
           timezone: tz,
@@ -320,6 +321,12 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
               name="name"
               required
               placeholder="Your name"
+              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
+            />
+            <input
+              name="company"
+              required
+              placeholder="Company"
               className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
             />
             <input

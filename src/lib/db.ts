@@ -84,6 +84,10 @@ function createDb() {
   if (!hostCols.some((c) => c.name === "api_token")) {
     db.exec("ALTER TABLE hosts ADD COLUMN api_token TEXT");
   }
+  const bookingCols = db.prepare("PRAGMA table_info(bookings)").all() as { name: string }[];
+  if (!bookingCols.some((c) => c.name === "guest_company")) {
+    db.exec("ALTER TABLE bookings ADD COLUMN guest_company TEXT NOT NULL DEFAULT ''");
+  }
   const tokenless = db
     .prepare("SELECT id FROM hosts WHERE api_token IS NULL OR api_token = ''")
     .all() as { id: number }[];
@@ -136,6 +140,7 @@ export interface Booking {
   event_type_id: number;
   guest_name: string;
   guest_email: string;
+  guest_company: string;
   guest_timezone: string;
   notes: string;
   start_utc: string;

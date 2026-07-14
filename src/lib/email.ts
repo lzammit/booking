@@ -25,7 +25,13 @@ function icsEscape(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
 
-function buildIcs(booking: Booking, host: Host, eventType: EventType, method: "REQUEST" | "CANCEL"): string {
+function buildIcs(
+  booking: Booking,
+  host: Host,
+  eventType: EventType,
+  method: "REQUEST" | "CANCEL",
+  summary: string
+): string {
   const fmt = (iso: string) =>
     DateTime.fromISO(iso, { zone: "utc" }).toFormat("yyyyMMdd'T'HHmmss'Z'");
   const cancelUrl = `${APP_URL}/cancel/${booking.cancel_token}`;
@@ -39,7 +45,7 @@ function buildIcs(booking: Booking, host: Host, eventType: EventType, method: "R
     `DTSTAMP:${fmt(DateTime.utc().toISO()!)}`,
     `DTSTART:${fmt(booking.start_utc)}`,
     `DTEND:${fmt(booking.end_utc)}`,
-    `SUMMARY:${icsEscape(`${eventType.name} — ${host.name} / ${booking.guest_name}`)}`,
+    `SUMMARY:${icsEscape(summary)}`,
     `DESCRIPTION:${icsEscape(`${booking.notes ? booking.notes + "\n\n" : ""}Cancel: ${cancelUrl}`)}`,
     `ORGANIZER;CN=${icsEscape(host.name)}:mailto:${host.email}`,
     `ATTENDEE;CN=${icsEscape(booking.guest_name)};RSVP=TRUE:mailto:${booking.guest_email}`,
@@ -70,12 +76,17 @@ export async function sendBookingEmails(
     .setZone(host.timezone)
     .toFormat("cccc, LLLL d yyyy 'at' h:mm a (ZZZZ)");
   const cancelUrl = `${APP_URL}/cancel/${booking.cancel_token}`;
-  const ics = buildIcs(booking, host, eventType, kind === "confirmed" ? "REQUEST" : "CANCEL");
-  const icsAttachment = {
+  const method = kind === "confirmed" ? "REQUEST" : "CANCEL";
+  // The host's invite (and email subject) leads with who's coming:
+  // "<Company> - <Guest name>". The guest's invite leads with the meeting.
+  const hostSummary = booking.guest_company
+    ? `${booking.guest_company} - ${booking.guest_name}`
+    : `${eventType.name} - ${booking.guest_name}`;
+  const icsFor = (summary: string) => ({
     filename: kind === "confirmed" ? "invite.ics" : "cancel.ics",
-    content: ics,
-    contentType: `text/calendar; method=${kind === "confirmed" ? "REQUEST" : "CANCEL"}`,
-  };
+    content: buildIcs(booking, host, eventType, method, summary),
+    contentType: `text/calendar; method=${method}`,
+  });
 
   const subjectBase = `${eventType.name} with ${host.name}`;
   const results = await Promise.allSettled([
@@ -90,20 +101,17 @@ export async function sendBookingEmails(
         kind === "confirmed"
           ? `Hi ${booking.guest_name},\n\nYour booking is confirmed.\n\nWhat: ${subjectBase} (${eventType.duration_min} min)\nWhen: ${startGuest}\n\nNeed to cancel? ${cancelUrl}\n`
           : `Hi ${booking.guest_name},\n\nThis booking has been cancelled.\n\nWhat: ${subjectBase}\nWhen: ${startGuest}\n`,
-      attachments: [icsAttachment],
+      attachments: [icsFor(`${subjectBase}`)],
     }),
     t.sendMail({
       from,
       to: host.email,
-      subject:
-        kind === "confirmed"
-          ? `New booking: ${booking.guest_name} — ${startHost}`
-          : `Cancelled: ${booking.guest_name} — ${startHost}`,
+      subject: kind === "confirmed" ? hostSummary : `Cancelled: ${hostSummary}`,
       text:
         kind === "confirmed"
-          ? `${booking.guest_name} <${booking.guest_email}> booked "${eventType.name}".\n\nWhen: ${startHost}\nNotes: ${booking.notes || "(none)"}\n`
-          : `${booking.guest_name} <${booking.guest_email}> — booking "${eventType.name}" on ${startHost} was cancelled.\n`,
-      attachments: [icsAttachment],
+          ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> booked "${eventType.name}".\n\nWhen: ${startHost}\nNotes: ${booking.notes || "(none)"}\n`
+          : `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> — booking "${eventType.name}" on ${startHost} was cancelled.\n`,
+      attachments: [icsFor(hostSummary)],
     }),
   ]);
   for (const r of results) {

@@ -193,6 +193,9 @@ export default async function DashboardPage({
                 <div className="flex-1">
                   <div className="font-medium">
                     {b.event_name} — {b.guest_name}
+                    {b.guest_company && (
+                      <span className="text-gray-500"> ({b.guest_company})</span>
+                    )}
                   </div>
                   <div className="text-sm text-gray-500">
                     {fmt(b.start_utc)} · {b.guest_email}

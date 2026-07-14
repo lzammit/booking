@@ -11,6 +11,7 @@ const bookSchema = z.object({
   eventTypeId: z.number().int(),
   start: z.string(),
   name: z.string().min(1).max(120),
+  company: z.string().min(1).max(120),
   email: z.string().email().max(200),
   notes: z.string().max(2000).default(""),
   timezone: z.string().max(60).default("UTC"),
@@ -58,14 +59,15 @@ export async function POST(req: NextRequest) {
   const cancelToken = randomBytes(24).toString("hex");
   const res = db
     .prepare(
-      `INSERT INTO bookings (host_id, event_type_id, guest_name, guest_email, guest_timezone, notes, start_utc, end_utc, cancel_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO bookings (host_id, event_type_id, guest_name, guest_email, guest_company, guest_timezone, notes, start_utc, end_utc, cancel_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       host.id,
       eventType.id,
       input.name,
       input.email,
+      input.company,
       tzOk,
       input.notes,
       startIso,
@@ -79,8 +81,8 @@ export async function POST(req: NextRequest) {
   // Best-effort side effects; the booking stands even if these fail.
   const msEventId = await createOutlookEvent({
     hostId: host.id,
-    subject: `${eventType.name} — ${input.name}`,
-    body: `${input.notes ? input.notes + "\n\n" : ""}Booked via ${process.env.APP_URL || "booking app"}. Guest: ${input.name} <${input.email}>`,
+    subject: `${input.company} - ${input.name}`,
+    body: `${input.notes ? input.notes + "\n\n" : ""}Booked via ${process.env.APP_URL || "booking app"}. Guest: ${input.name} (${input.company}) <${input.email}>`,
     startUtc: startIso,
     endUtc: endIso,
     guestName: input.name,
