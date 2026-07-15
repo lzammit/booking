@@ -3,6 +3,7 @@ import db, { Booking, EventType } from "@/lib/db";
 import { requireHost } from "@/lib/session";
 import { cancelBookingAsHost, disconnectMicrosoft, updateSlug } from "@/lib/actions";
 import { msAccountFor, msConfigured } from "@/lib/msgraph";
+import SignatureCard from "./SignatureCard";
 
 export default async function DashboardPage({
   searchParams,
@@ -90,6 +91,14 @@ export default async function DashboardPage({
         <p className="text-xs text-gray-400 mt-2">
           Changing it breaks previously shared links — pick something and stick with it.
         </p>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Email signature</h2>
+        <p className="text-sm text-gray-500 mb-3">
+          Add this to your email signature so people can book you in one click.
+        </p>
+        <SignatureCard bookingUrl={`${process.env.APP_URL}/book/${host.slug}`} />
       </section>
 
       <section className="rounded-xl border border-gray-200 p-4 flex items-center justify-between">
