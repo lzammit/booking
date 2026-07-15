@@ -6,9 +6,9 @@ import TimezoneField from "./TimezoneField";
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; invite?: string; email?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, invite, email } = await searchParams;
   const needsInvite = Boolean(signupCode());
   return (
     <main className="flex-1 flex items-center justify-center p-8">
@@ -29,6 +29,7 @@ export default async function SignupPage({
           name="email"
           type="email"
           required
+          defaultValue={email}
           placeholder="Email"
           className="w-full rounded-lg border border-gray-300 px-3 py-2"
         />
@@ -45,6 +46,7 @@ export default async function SignupPage({
           <input
             name="invite"
             required
+            defaultValue={invite}
             placeholder="Invite code"
             className="w-full rounded-lg border border-gray-300 px-3 py-2"
           />

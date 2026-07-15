@@ -63,6 +63,34 @@ function buildIcs(
   return lines.join("\r\n");
 }
 
+/** Invitation to create a host account. Returns false when sending failed. */
+export async function sendInviteEmail(
+  to: string,
+  inviterName: string,
+  signupUrl: string
+): Promise<boolean> {
+  const t = transport();
+  if (!t) return false;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  try {
+    await t.sendMail({
+      from,
+      to,
+      subject: `${inviterName} invited you to Booking`,
+      text: `${inviterName} invited you to create a booking page.\n\nPeople will be able to pick meeting times that fit your calendar.\n\nCreate your account: ${signupUrl}\n`,
+      html: `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333;">
+<p>${inviterName} invited you to create a booking page — a link people use to pick meeting times that fit your calendar.</p>
+<p style="margin: 20px 0;"><a href="${signupUrl}" style="display: inline-block; background-color: #1C2333; color: #FBFAF7; text-decoration: none; font-weight: bold; padding: 10px 18px; border-radius: 8px;">Create your account</a></p>
+<p style="color: #6b7280; font-size: 12px;">Or open: <a href="${signupUrl}" style="color: #0563C1;">${signupUrl}</a></p>
+</div>`,
+    });
+    return true;
+  } catch (err) {
+    console.error("Invite email failed:", err);
+    return false;
+  }
+}
+
 export async function sendBookingEmails(
   booking: Booking,
   host: Host,

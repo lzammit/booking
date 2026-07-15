@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import db, { Booking, EventType, Host, setSetting, signupCode } from "./db";
 import { getSession, requireAdmin, requireHost } from "./session";
-import { sendBookingEmails } from "./email";
+import { sendBookingEmails, sendInviteEmail } from "./email";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
 
 function slugify(s: string): string {
@@ -256,6 +256,26 @@ export async function adminDeleteHost(formData: FormData) {
   // Foreign keys cascade: event types, availability, bookings, tokens, busy data.
   db.prepare("DELETE FROM hosts WHERE id = ?").run(id);
   redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminInviteUser(formData: FormData) {
+  const admin = await requireAdmin();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  if (!z.string().email().max(200).safeParse(email).success) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("Enter a valid email address"));
+  }
+  if (db.prepare("SELECT 1 FROM hosts WHERE email = ?").get(email)) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent(`${email} already has an account`));
+  }
+  const params = new URLSearchParams({ email });
+  const code = signupCode();
+  if (code) params.set("invite", code);
+  const url = `${process.env.APP_URL}/signup?${params}`;
+  const sent = await sendInviteEmail(email, admin.name, url);
+  if (!sent) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("Sending failed — check SMTP settings"));
+  }
+  redirect("/dashboard/admin?invited=" + encodeURIComponent(email));
 }
 
 export async function adminSetSignupCode(formData: FormData) {

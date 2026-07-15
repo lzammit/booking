@@ -3,6 +3,7 @@ import db, { signupCode } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import {
   adminDeleteHost,
+  adminInviteUser,
   adminResetPassword,
   adminSetSignupCode,
   adminToggleAdmin,
@@ -26,9 +27,9 @@ interface HostRow {
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; invited?: string }>;
 }) {
-  const { error, saved } = await searchParams;
+  const { error, saved, invited } = await searchParams;
   const admin = await requireAdmin();
   const nowIso = DateTime.utc().toISO();
   const hosts = db
@@ -70,6 +71,30 @@ export default async function AdminPage({
           Done.
         </p>
       )}
+      {invited && (
+        <p className="rounded-md bg-green-50 border border-green-200 text-green-700 px-3 py-2 text-sm">
+          Invitation sent to {invited}.
+        </p>
+      )}
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Invite a user</h2>
+        <p className="text-sm text-gray-500">
+          Sends an email with a signup link — invite code and email pre-filled.
+        </p>
+        <form action={adminInviteUser} className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            name="email"
+            type="email"
+            required
+            placeholder="colleague@example.com"
+            className="w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+          />
+          <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+            Send invitation
+          </button>
+        </form>
+      </section>
 
       <section className="rounded-xl border border-gray-200 p-4">
         <h2 className="font-semibold">Invitation code</h2>
