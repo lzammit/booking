@@ -3,18 +3,27 @@
 import { useMemo, useRef, useState } from "react";
 
 /**
- * Email-signature snippet with the host's booking link. Email-client-safe:
- * table layout, inline styles, no external assets. "Copy signature" puts
- * rich HTML on the clipboard for pasting straight into Outlook / Apple Mail
- * signature editors; "Copy HTML" gives the raw source.
+ * Email-signature snippets with the host's booking link. Email-client-safe:
+ * table layout, inline styles, no external assets. Two styles:
+ *  - "button": standalone branded block (button + circadian bar)
+ *  - "compact": one line that blends into an existing corporate signature
+ * "Copy signature" puts rich HTML on the clipboard for pasting straight into
+ * Outlook / Apple Mail signature editors; "Copy HTML" gives the raw source.
  */
 export default function SignatureCard({ bookingUrl }: { bookingUrl: string }) {
+  const [style, setStyle] = useState<"button" | "compact">("button");
   const [copied, setCopied] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  const html = useMemo(
-    () =>
-      `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif;">
+  const html = useMemo(() => {
+    if (style === "compact") {
+      return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif;">
+  <tr>
+    <td style="font-size: 13px; color: #333333; padding: 4px 0;">&#128197; <a href="${bookingUrl}" target="_blank" style="color: #0563C1; font-weight: bold;">Book time with me</a></td>
+  </tr>
+</table>`;
+    }
+    return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif;">
   <tr>
     <td style="padding: 2px 0 8px 0;">
       <a href="${bookingUrl}" target="_blank" style="display: inline-block; background-color: #1C2333; color: #FBFAF7; text-decoration: none; font-size: 14px; font-weight: bold; padding: 10px 18px; border-radius: 8px;">&#128197;&nbsp; Book time with me</a>
@@ -36,9 +45,8 @@ export default function SignatureCard({ bookingUrl }: { bookingUrl: string }) {
       <a href="${bookingUrl}" target="_blank" style="color: #6b7280; font-size: 12px; text-decoration: none;">${bookingUrl.replace(/^https?:\/\//, "")}</a>
     </td>
   </tr>
-</table>`,
-    [bookingUrl]
-  );
+</table>`;
+  }, [bookingUrl, style]);
 
   async function copyRich() {
     try {
@@ -74,6 +82,20 @@ export default function SignatureCard({ bookingUrl }: { bookingUrl: string }) {
 
   return (
     <div>
+      <div className="mb-3 flex gap-1 rounded-lg bg-gray-100 p-1 w-fit text-sm">
+        <button
+          onClick={() => setStyle("button")}
+          className={`rounded-md px-3 py-1 ${style === "button" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`}
+        >
+          Button block
+        </button>
+        <button
+          onClick={() => setStyle("compact")}
+          className={`rounded-md px-3 py-1 ${style === "compact" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`}
+        >
+          Compact line
+        </button>
+      </div>
       <div
         ref={previewRef}
         className="rounded-lg border border-gray-200 bg-white p-4"
@@ -93,7 +115,7 @@ export default function SignatureCard({ bookingUrl }: { bookingUrl: string }) {
           {copied === "html" ? "Copied ✓" : "Copy HTML code"}
         </button>
         <p className="text-xs text-gray-400">
-          “Copy signature” pastes ready-made into Outlook / Apple Mail signature settings.
+          Paste into your mail app’s signature editor, wherever you want it to sit.
         </p>
       </div>
     </div>
