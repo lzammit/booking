@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import db, { Booking, EventType, Host } from "./db";
-import { getSession, requireHost } from "./session";
+import { getSession, requireAdmin, requireHost } from "./session";
 import { sendBookingEmails } from "./email";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
 
@@ -232,4 +232,41 @@ export async function disconnectMicrosoft() {
   const host = await requireHost();
   msDisconnect(host.id);
   redirect("/dashboard?ms=disconnected");
+}
+
+// ----- Admin actions -----
+
+export async function adminToggleAdmin(formData: FormData) {
+  const admin = await requireAdmin();
+  const id = Number(formData.get("id"));
+  if (id === admin.id) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("You can't demote yourself"));
+  }
+  db.prepare("UPDATE hosts SET is_admin = 1 - is_admin WHERE id = ?").run(id);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminDeleteHost(formData: FormData) {
+  const admin = await requireAdmin();
+  const id = Number(formData.get("id"));
+  if (id === admin.id) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("You can't delete yourself"));
+  }
+  // Foreign keys cascade: event types, availability, bookings, tokens, busy data.
+  db.prepare("DELETE FROM hosts WHERE id = ?").run(id);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminResetPassword(formData: FormData) {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  const password = String(formData.get("password") || "");
+  if (password.length < 8) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("Password must be 8+ characters"));
+  }
+  db.prepare("UPDATE hosts SET password_hash = ? WHERE id = ?").run(
+    bcrypt.hashSync(password, 10),
+    id
+  );
+  redirect("/dashboard/admin?saved=1");
 }

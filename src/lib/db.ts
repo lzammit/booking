@@ -88,6 +88,9 @@ function createDb() {
   if (!bookingCols.some((c) => c.name === "guest_company")) {
     db.exec("ALTER TABLE bookings ADD COLUMN guest_company TEXT NOT NULL DEFAULT ''");
   }
+  if (!hostCols.some((c) => c.name === "is_admin")) {
+    db.exec("ALTER TABLE hosts ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
+  }
   const tokenless = db
     .prepare("SELECT id FROM hosts WHERE api_token IS NULL OR api_token = ''")
     .all() as { id: number }[];
@@ -111,6 +114,7 @@ export interface Host {
   password_hash: string;
   timezone: string;
   api_token: string;
+  is_admin: number;
 }
 
 export interface EventType {

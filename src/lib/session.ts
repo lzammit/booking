@@ -41,3 +41,9 @@ export async function requireHost(): Promise<Host> {
   if (!host) redirect("/login");
   return host;
 }
+
+export async function requireAdmin(): Promise<Host> {
+  const host = await requireHost();
+  if (!host.is_admin) redirect("/dashboard");
+  return host;
+}

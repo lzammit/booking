@@ -24,6 +24,11 @@ export default async function DashboardLayout({
           <Link href="/dashboard/availability" className="text-gray-600 hover:text-black">
             Availability
           </Link>
+          {host.is_admin === 1 && (
+            <Link href="/dashboard/admin" className="text-gray-600 hover:text-black">
+              Admin
+            </Link>
+          )}
           <span className="flex-1" />
           <Link href={`/book/${host.slug}`} className="text-blue-600 hover:underline">
             /book/{host.slug}
