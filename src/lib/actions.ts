@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import db, { Booking, EventType, Host } from "./db";
+import db, { Booking, EventType, Host, setSetting, signupCode } from "./db";
 import { getSession, requireAdmin, requireHost } from "./session";
 import { sendBookingEmails } from "./email";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
@@ -33,7 +33,8 @@ export async function signup(formData: FormData) {
   if (!parsed.success) redirect("/signup?error=Invalid+form+data");
   const { name, email, password, timezone, invite } = parsed.data;
 
-  if (process.env.SIGNUP_CODE && invite !== process.env.SIGNUP_CODE) {
+  const requiredCode = signupCode();
+  if (requiredCode && invite !== requiredCode) {
     redirect("/signup?error=Invalid+invite+code");
   }
 
@@ -254,6 +255,19 @@ export async function adminDeleteHost(formData: FormData) {
   }
   // Foreign keys cascade: event types, availability, bookings, tokens, busy data.
   db.prepare("DELETE FROM hosts WHERE id = ?").run(id);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminSetSignupCode(formData: FormData) {
+  await requireAdmin();
+  const code = String(formData.get("code") ?? "").trim();
+  if (code && !/^[\x20-\x7E]{4,60}$/.test(code)) {
+    redirect(
+      "/dashboard/admin?error=" +
+        encodeURIComponent("Code must be 4-60 plain characters (or empty to open signup)")
+    );
+  }
+  setSetting("signup_code", code);
   redirect("/dashboard/admin?saved=1");
 }
 

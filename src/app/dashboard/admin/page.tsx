@@ -1,7 +1,12 @@
 import { DateTime } from "luxon";
-import db from "@/lib/db";
+import db, { signupCode } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
-import { adminDeleteHost, adminResetPassword, adminToggleAdmin } from "@/lib/actions";
+import {
+  adminDeleteHost,
+  adminResetPassword,
+  adminSetSignupCode,
+  adminToggleAdmin,
+} from "@/lib/actions";
 import ConfirmSubmit from "./ConfirmSubmit";
 
 interface HostRow {
@@ -65,6 +70,36 @@ export default async function AdminPage({
           Done.
         </p>
       )}
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Invitation code</h2>
+        <p className="text-sm text-gray-500">
+          {signupCode()
+            ? "New accounts must enter this code to sign up."
+            : "Signup is currently open — anyone can create an account."}
+        </p>
+        <form action={adminSetSignupCode} className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            name="code"
+            defaultValue={signupCode()}
+            placeholder="Empty = open signup"
+            className="w-64 rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-sm"
+          />
+          <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+            Save
+          </button>
+          <button
+            formAction={async (fd: FormData) => {
+              "use server";
+              fd.set("code", crypto.randomUUID().replace(/-/g, "").slice(0, 12));
+              await adminSetSignupCode(fd);
+            }}
+            className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm hover:bg-gray-50"
+          >
+            Generate new
+          </button>
+        </form>
+      </section>
 
       <div className="space-y-4">
         {hosts.map((h) => {

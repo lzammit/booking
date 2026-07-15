@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signup } from "@/lib/actions";
+import { signupCode } from "@/lib/db";
 import TimezoneField from "./TimezoneField";
 
 export default async function SignupPage({
@@ -8,7 +9,7 @@ export default async function SignupPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const needsInvite = Boolean(process.env.SIGNUP_CODE);
+  const needsInvite = Boolean(signupCode());
   return (
     <main className="flex-1 flex items-center justify-center p-8">
       <form action={signup} className="w-full max-w-sm space-y-4">

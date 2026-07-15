@@ -79,7 +79,20 @@ function createDb() {
       blocks INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (host_id, source)
     );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
+  // Seed the signup code from the env once, so it becomes UI-manageable.
+  if (
+    process.env.SIGNUP_CODE &&
+    !db.prepare("SELECT 1 FROM settings WHERE key = 'signup_code'").get()
+  ) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('signup_code', ?)").run(
+      process.env.SIGNUP_CODE
+    );
+  }
   const hostCols = db.prepare("PRAGMA table_info(hosts)").all() as { name: string }[];
   if (!hostCols.some((c) => c.name === "api_token")) {
     db.exec("ALTER TABLE hosts ADD COLUMN api_token TEXT");
@@ -105,6 +118,24 @@ const db = globalForDb._bookingDb ?? createDb();
 globalForDb._bookingDb = db;
 
 export default db;
+
+export function getSetting(key: string): string | null {
+  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
+    | { value: string }
+    | undefined;
+  return row?.value ?? null;
+}
+
+export function setSetting(key: string, value: string) {
+  db.prepare(
+    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  ).run(key, value);
+}
+
+/** Current signup invite code; empty string means signup is open. */
+export function signupCode(): string {
+  return getSetting("signup_code") ?? process.env.SIGNUP_CODE ?? "";
+}
 
 export interface Host {
   id: number;
