@@ -63,6 +63,27 @@ function buildIcs(
   return lines.join("\r\n");
 }
 
+/** Heads-up email when a user is granted admin rights. Best effort. */
+export async function sendAdminPromotionEmail(
+  to: string,
+  name: string,
+  promotedBy: string
+) {
+  const t = transport();
+  if (!t) return;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  try {
+    await t.sendMail({
+      from,
+      to,
+      subject: "You're now an admin on Booking",
+      text: `Hi ${name},\n\n${promotedBy} made you an administrator on ${APP_URL}.\n\nYou can now manage users and invitations from the Admin page: ${APP_URL}/dashboard/admin\n`,
+    });
+  } catch (err) {
+    console.error("Admin promotion email failed:", err);
+  }
+}
+
 /** Invitation to create a host account. Returns false when sending failed. */
 export async function sendInviteEmail(
   to: string,

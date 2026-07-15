@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import db, { Booking, EventType, Host, setSetting, signupCode } from "./db";
 import { getSession, requireAdmin, requireHost } from "./session";
-import { sendBookingEmails, sendInviteEmail } from "./email";
+import { sendAdminPromotionEmail, sendBookingEmails, sendInviteEmail } from "./email";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
 
 function slugify(s: string): string {
@@ -244,6 +244,10 @@ export async function adminToggleAdmin(formData: FormData) {
     redirect("/dashboard/admin?error=" + encodeURIComponent("You can't demote yourself"));
   }
   db.prepare("UPDATE hosts SET is_admin = 1 - is_admin WHERE id = ?").run(id);
+  const target = db.prepare("SELECT * FROM hosts WHERE id = ?").get(id) as Host | undefined;
+  if (target?.is_admin) {
+    await sendAdminPromotionEmail(target.email, target.name, admin.name);
+  }
   redirect("/dashboard/admin?saved=1");
 }
 

@@ -159,9 +159,15 @@ export default async function AdminPage({
                 <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
                   <form action={adminToggleAdmin}>
                     <input type="hidden" name="id" value={h.id} />
-                    <button className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
-                      {h.is_admin ? "Remove admin" : "Make admin"}
-                    </button>
+                    <ConfirmSubmit
+                      variant="neutral"
+                      label={h.is_admin ? "Remove admin" : "Make admin"}
+                      confirmText={
+                        h.is_admin
+                          ? `Remove admin rights from ${h.name}?`
+                          : `Make ${h.name} an admin? They'll be able to manage all users, and will be notified by email.`
+                      }
+                    />
                   </form>
                   <form action={adminResetPassword} className="flex items-center gap-2">
                     <input type="hidden" name="id" value={h.id} />
