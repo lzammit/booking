@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import db, { adminCode, signupCode } from "@/lib/db";
+import db, { adminCode, adminCodeEnabled, signupCode } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import {
   adminDeleteHost,
@@ -8,6 +8,7 @@ import {
   adminSetAdminCode,
   adminSetSignupCode,
   adminToggleAdmin,
+  adminToggleAdminCode,
 } from "@/lib/actions";
 import ConfirmSubmit from "./ConfirmSubmit";
 
@@ -128,17 +129,35 @@ export default async function AdminPage({
       </section>
 
       <section className="rounded-xl border border-gray-200 p-4">
-        <h2 className="font-semibold">Admin onboarding code</h2>
-        <p className="text-sm text-gray-500">
-          Anyone who signs up with this code becomes an admin. Keep it secret;
-          share it only with people who should manage the app. Leave empty to
-          disable self-onboarding as admin.
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold">Admin onboarding code</h2>
+          {adminCodeEnabled() ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs font-medium text-green-700">
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+              Enabled
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 border border-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+              <span className="h-2 w-2 rounded-full bg-gray-400" />
+              Disabled
+            </span>
+          )}
+          <form action={adminToggleAdminCode} className="ml-auto">
+            <button className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
+              {adminCodeEnabled() ? "Disable" : "Enable"}
+            </button>
+          </form>
+        </div>
+        <p className="mt-1 text-sm text-gray-500">
+          {adminCodeEnabled()
+            ? "Anyone who signs up with this code becomes an admin. Keep it secret; share it only with people who should manage the app."
+            : "Disabled — the code below is kept but signing up with it no longer grants admin. Enable it to allow admin onboarding."}
         </p>
         <form action={adminSetAdminCode} className="mt-3 flex flex-wrap items-center gap-2">
           <input
             name="code"
             defaultValue={adminCode()}
-            placeholder="Empty = disabled"
+            placeholder="No code set"
             className="w-64 rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-sm"
           />
           <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
@@ -155,7 +174,7 @@ export default async function AdminPage({
             Generate new
           </button>
         </form>
-        {adminCode() && (
+        {adminCodeEnabled() && adminCode() && (
           <p className="mt-3 text-xs text-gray-400">
             Onboarding link (email &amp; code pre-filled on signup):{" "}
             <code className="break-all">

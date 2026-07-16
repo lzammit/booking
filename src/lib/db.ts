@@ -157,6 +157,11 @@ export function adminCode(): string {
   return getSetting("admin_code") ?? "";
 }
 
+/** Whether the admin onboarding code is currently active. Default: enabled. */
+export function adminCodeEnabled(): boolean {
+  return getSetting("admin_code_enabled") !== "0";
+}
+
 export interface Host {
   id: number;
   email: string;

@@ -5,7 +5,15 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import db, { adminCode, Booking, EventType, Host, setSetting, signupCode } from "./db";
+import db, {
+  adminCode,
+  adminCodeEnabled,
+  Booking,
+  EventType,
+  Host,
+  setSetting,
+  signupCode,
+} from "./db";
 import { getSession, requireAdmin, requireHost } from "./session";
 import { sendAdminPromotionEmail, sendBookingEmails, sendInviteEmail } from "./email";
 import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
@@ -38,7 +46,8 @@ export async function signup(formData: FormData) {
   // otherwise the regular signup code is enforced when one is set.
   const adminOnboard = adminCode();
   const requiredCode = signupCode();
-  const isAdminSignup = Boolean(adminOnboard) && invite === adminOnboard;
+  const isAdminSignup =
+    adminCodeEnabled() && Boolean(adminOnboard) && invite === adminOnboard;
   if (!isAdminSignup && requiredCode && invite !== requiredCode) {
     redirect("/signup?error=Invalid+invite+code");
   }
@@ -316,10 +325,16 @@ export async function adminSetAdminCode(formData: FormData) {
   if (code && !/^[\x20-\x7E]{6,60}$/.test(code)) {
     redirect(
       "/dashboard/admin?error=" +
-        encodeURIComponent("Admin code must be 6-60 plain characters (or empty to disable)")
+        encodeURIComponent("Admin code must be 6-60 plain characters (or empty to clear)")
     );
   }
   setSetting("admin_code", code);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminToggleAdminCode() {
+  await requireAdmin();
+  setSetting("admin_code_enabled", adminCodeEnabled() ? "0" : "1");
   redirect("/dashboard/admin?saved=1");
 }
 
