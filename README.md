@@ -145,6 +145,10 @@ bookings, agent status) and lets you:
 
 - Invite users by email (sends a pre-filled signup link).
 - Set or generate the signup invitation code (empty = open signup).
+- Manage a separate **admin onboarding code** — signing up with it grants admin
+  rights. It can be set, generated, and enabled/disabled independently (disable
+  keeps the code but stops it working, so you can flip it on only while
+  onboarding a new admin).
 - Promote / demote admins, reset passwords, delete users (cascades their data).
 
 ---

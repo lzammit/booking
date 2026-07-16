@@ -114,7 +114,7 @@ Eight tables (`src/lib/db.ts`). Foreign keys cascade on host deletion.
 | `ms_tokens` | Microsoft 365 OAuth tokens | per host, refresh handled lazily |
 | `external_busy` | Busy intervals pushed by agents | `source`, `start_utc`, `end_utc` |
 | `agent_syncs` | Agent heartbeat | `source`, `last_sync`, `blocks` (drives the "Connected/Offline" badge) |
-| `settings` | Key/value app settings | e.g. `signup_code` |
+| `settings` | Key/value app settings | `signup_code`, `admin_code`, `admin_code_enabled` |
 
 Times are stored in UTC (ISO 8601). Availability rules are stored in the host's
 local minutes-from-midnight and resolved against the host timezone at
@@ -192,6 +192,11 @@ types, slug, and all admin operations.
   UI); admins can't demote or delete themselves.
 - **Signup** is gated by an invitation code when set (managed in the admin UI,
   seeded from `SIGNUP_CODE`).
+- **Admin onboarding code** — a separate secret (settings key `admin_code`);
+  signing up with it grants admin. It has an independent enable/disable flag
+  (`admin_code_enabled`) so it can be kept but switched off between onboardings.
+  Signup honors it only when enabled; the admin code always suffices on its own,
+  otherwise the regular signup code is enforced.
 - The app process binds to localhost; only Caddy is exposed.
 
 ## Deployment
