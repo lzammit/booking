@@ -104,11 +104,22 @@ function createDb() {
   if (!hostCols.some((c) => c.name === "is_admin")) {
     db.exec("ALTER TABLE hosts ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
   }
+  if (!hostCols.some((c) => c.name === "ics_url")) {
+    db.exec("ALTER TABLE hosts ADD COLUMN ics_url TEXT");
+  }
+  if (!hostCols.some((c) => c.name === "feed_token")) {
+    db.exec("ALTER TABLE hosts ADD COLUMN feed_token TEXT");
+  }
   const tokenless = db
     .prepare("SELECT id FROM hosts WHERE api_token IS NULL OR api_token = ''")
     .all() as { id: number }[];
   const setToken = db.prepare("UPDATE hosts SET api_token = ? WHERE id = ?");
   for (const h of tokenless) setToken.run(randomBytes(24).toString("hex"), h.id);
+  const feedless = db
+    .prepare("SELECT id FROM hosts WHERE feed_token IS NULL OR feed_token = ''")
+    .all() as { id: number }[];
+  const setFeedToken = db.prepare("UPDATE hosts SET feed_token = ? WHERE id = ?");
+  for (const h of feedless) setFeedToken.run(randomBytes(24).toString("hex"), h.id);
   return db;
 }
 
@@ -146,6 +157,8 @@ export interface Host {
   timezone: string;
   api_token: string;
   is_admin: number;
+  ics_url: string | null;
+  feed_token: string;
 }
 
 export interface EventType {

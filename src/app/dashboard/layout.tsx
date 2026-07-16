@@ -24,6 +24,9 @@ export default async function DashboardLayout({
           <Link href="/dashboard/availability" className="text-gray-600 hover:text-black">
             Availability
           </Link>
+          <Link href="/dashboard/settings" className="text-gray-600 hover:text-black">
+            Settings
+          </Link>
           {host.is_admin === 1 && (
             <Link href="/dashboard/admin" className="text-gray-600 hover:text-black">
               Admin

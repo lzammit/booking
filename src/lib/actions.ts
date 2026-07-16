@@ -8,6 +8,7 @@ import { z } from "zod";
 import db, { Booking, EventType, Host, setSetting, signupCode } from "./db";
 import { getSession, requireAdmin, requireHost } from "./session";
 import { sendAdminPromotionEmail, sendBookingEmails, sendInviteEmail } from "./email";
+import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
 
 function slugify(s: string): string {
@@ -131,6 +132,41 @@ export async function saveAvailability(formData: FormData) {
   redirect("/dashboard/availability?saved=1");
 }
 
+/** Subscribe to a calendar feed (ICS URL) — server-side poll. */
+export async function subscribeIcsFeed(formData: FormData) {
+  const host = await requireHost();
+  // Apple/iCloud hand out webcal:// links — same thing over HTTPS.
+  const url = String(formData.get("icsUrl") || "")
+    .trim()
+    .replace(/^webcal:\/\//i, "https://");
+  if (!/^https:\/\/\S+$/.test(url) || url.length > 500) {
+    redirect("/dashboard/settings?error=" + encodeURIComponent("Enter a valid https:// or webcal:// ICS link"));
+  }
+  let blocks: number | null = null;
+  try {
+    blocks = await refreshIcsFeed(host.id, url);
+  } catch (err) {
+    console.error(`ICS subscribe failed for host ${host.id}:`, err);
+  }
+  if (blocks === null) {
+    redirect(
+      "/dashboard/settings?error=" +
+        encodeURIComponent("Couldn't read that link as an ICS calendar — check the URL")
+    );
+  }
+  db.prepare("UPDATE hosts SET ics_url = ? WHERE id = ?").run(url, host.id);
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings");
+}
+
+export async function unsubscribeIcsFeed() {
+  const host = await requireHost();
+  db.prepare("UPDATE hosts SET ics_url = NULL WHERE id = ?").run(host.id);
+  clearIcsFeedData(host.id);
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings");
+}
+
 export async function updateSlug(formData: FormData) {
   const host = await requireHost();
   const slug = String(formData.get("slug") || "").toLowerCase().trim();
@@ -232,7 +268,7 @@ export async function cancelBookingAsHost(formData: FormData) {
 export async function disconnectMicrosoft() {
   const host = await requireHost();
   msDisconnect(host.id);
-  redirect("/dashboard?ms=disconnected");
+  redirect("/dashboard/settings?ms=disconnected");
 }
 
 // ----- Admin actions -----

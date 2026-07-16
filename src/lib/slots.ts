@@ -1,5 +1,6 @@
 import { DateTime, Interval } from "luxon";
 import db, { AvailabilityRule, Booking, EventType, Host } from "./db";
+import { refreshIcsFeedIfStale } from "./icsfeed";
 import { getBusyIntervals } from "./msgraph";
 
 /**
@@ -47,6 +48,9 @@ export async function computeSlots(
     )
   );
   busy.push(...(await getBusyIntervals(host.id, from.toUTC(), to.toUTC())));
+
+  // Published Outlook ICS feed (server-side poll, if subscribed).
+  await refreshIcsFeedIfStale(host);
 
   // Busy intervals pushed by local calendar agents (e.g. the Mac EventKit agent).
   const external = db

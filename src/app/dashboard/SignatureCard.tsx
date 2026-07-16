@@ -4,18 +4,38 @@ import { useMemo, useRef, useState } from "react";
 
 /**
  * Email-signature snippets with the host's booking link. Email-client-safe:
- * table layout, inline styles, no external assets. Two styles:
+ * table layout, inline styles. Three styles:
  *  - "button": standalone branded block (button + circadian bar)
+ *  - "animated": eye-catching animated GIF badge hosted on this server
+ *    (email clients only animate GIFs — CSS/JS is stripped; classic Windows
+ *    Outlook shows the first frame, which is the complete badge)
  *  - "compact": one line that blends into an existing corporate signature
  * "Copy signature" puts rich HTML on the clipboard for pasting straight into
  * Outlook / Apple Mail signature editors; "Copy HTML" gives the raw source.
  */
 export default function SignatureCard({ bookingUrl }: { bookingUrl: string }) {
-  const [style, setStyle] = useState<"button" | "compact">("button");
+  const [style, setStyle] = useState<"button" | "animated" | "compact">("button");
   const [copied, setCopied] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
   const html = useMemo(() => {
+    if (style === "animated") {
+      const origin = new URL(bookingUrl).origin;
+      return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif;">
+  <tr>
+    <td style="padding: 2px 0 8px 0;">
+      <a href="${bookingUrl}" target="_blank" style="text-decoration: none;">
+        <img src="${origin}/signature-badge.gif" width="220" height="48" alt="&#128197; Book time with me" style="display: block; border: 0; border-radius: 8px;" />
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="${bookingUrl}" target="_blank" style="color: #6b7280; font-size: 12px; text-decoration: none;">${bookingUrl.replace(/^https?:\/\//, "")}</a>
+    </td>
+  </tr>
+</table>`;
+    }
     if (style === "compact") {
       return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, Helvetica, sans-serif;">
   <tr>
@@ -90,6 +110,12 @@ export default function SignatureCard({ bookingUrl }: { bookingUrl: string }) {
           Button block
         </button>
         <button
+          onClick={() => setStyle("animated")}
+          className={`rounded-md px-3 py-1 ${style === "animated" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`}
+        >
+          Animated ✨
+        </button>
+        <button
           onClick={() => setStyle("compact")}
           className={`rounded-md px-3 py-1 ${style === "compact" ? "bg-white shadow-sm font-medium" : "text-gray-500"}`}
         >
@@ -115,7 +141,9 @@ export default function SignatureCard({ bookingUrl }: { bookingUrl: string }) {
           {copied === "html" ? "Copied ✓" : "Copy HTML code"}
         </button>
         <p className="text-xs text-gray-400">
-          Paste into your mail app’s signature editor, wherever you want it to sit.
+          {style === "animated"
+            ? "The badge is an animated GIF hosted on this site. Most clients animate it; classic Windows Outlook shows the (identical-looking) first frame. Recipients may need to load remote images."
+            : "Paste into your mail app’s signature editor, wherever you want it to sit."}
         </p>
       </div>
     </div>

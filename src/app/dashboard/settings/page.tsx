@@ -1,0 +1,198 @@
+import { DateTime } from "luxon";
+import db from "@/lib/db";
+import { requireHost } from "@/lib/session";
+import { disconnectMicrosoft, subscribeIcsFeed, unsubscribeIcsFeed } from "@/lib/actions";
+import { msAccountFor, msConfigured } from "@/lib/msgraph";
+import SignatureCard from "../SignatureCard";
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  const host = await requireHost();
+  const msAccount = msAccountFor(host.id);
+  const agentSync = db
+    .prepare("SELECT source, blocks, last_sync FROM agent_syncs WHERE host_id = ?")
+    .all(host.id) as { source: string; blocks: number; last_sync: string }[];
+  // Agent pushes every 5 minutes; >15 min silence means it's offline.
+  const allSyncs = agentSync.map((s) => {
+    const last = DateTime.fromSQL(s.last_sync, { zone: "utc" });
+    return {
+      ...s,
+      connected: DateTime.utc().diff(last, "minutes").minutes < 15,
+      lastLabel: last.setZone(host.timezone).toFormat("LLL d, h:mm a"),
+      agoLabel: last.toRelative() ?? "",
+    };
+  });
+  // The server-side ICS feed poll shows in its own card, not as an agent.
+  const feedSources = ["ics-feed", "outlook-feed"];
+  const icsFeed = allSyncs.find((s) => feedSources.includes(s.source)) ?? null;
+  const agents = allSyncs.filter((s) => !feedSources.includes(s.source));
+
+  return (
+    <main className="space-y-8">
+      <h1 className="text-2xl font-bold">Settings</h1>
+
+      {error && (
+        <p className="rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
+          {error}
+        </p>
+      )}
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Email signature</h2>
+        <p className="text-sm text-gray-500 mb-3">
+          Add this to your email signature so people can book you in one click.
+        </p>
+        <SignatureCard bookingUrl={`${process.env.APP_URL}/book/${host.slug}`} />
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">Microsoft 365 calendar</h2>
+            <p className="text-sm text-gray-500">
+              {!msConfigured()
+                ? "Graph API not configured on the server — use the calendar feed below or the Mac agent instead."
+                : msAccount
+                  ? `Connected as ${msAccount}. Busy times are blocked; bookings appear in Outlook.`
+                  : "Connect to block your busy times and create Outlook events on booking."}
+            </p>
+          </div>
+          {msConfigured() &&
+            (msAccount ? (
+              <form action={disconnectMicrosoft}>
+                <button className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50">
+                  Disconnect
+                </button>
+              </form>
+            ) : (
+              <a
+                href="/api/ms/connect"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              >
+                Connect
+              </a>
+            ))}
+        </div>
+
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <h3 className="text-sm font-medium">Calendar feed (ICS)</h3>
+          {host.ics_url ? (
+            <div className="mt-1 flex items-center justify-between gap-4">
+              <p className="text-sm text-gray-500 break-all">
+                Subscribed — this calendar&apos;s busy times sync automatically
+                {icsFeed ? ` (${icsFeed.blocks} busy blocks, updated ${icsFeed.agoLabel})` : ""}.
+                <span className="block text-xs text-gray-400 mt-0.5">{host.ics_url}</span>
+              </p>
+              <form action={unsubscribeIcsFeed}>
+                <button className="shrink-0 rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50">
+                  Unsubscribe
+                </button>
+              </form>
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-gray-500">
+                Paste any calendar&apos;s ICS link and its busy times sync automatically — no
+                install, no admin consent. <span className="text-gray-600">Google Calendar</span>:
+                Settings → your calendar → Integrate calendar → “Secret address in iCal format”.{" "}
+                <span className="text-gray-600">Outlook</span>: Settings → Calendar → Shared
+                calendars → “Publish a calendar” (some organizations disable this).{" "}
+                <span className="text-gray-600">iCloud</span>: public calendar link (webcal:// is
+                fine).
+              </p>
+              <form action={subscribeIcsFeed} className="mt-2 flex gap-2">
+                <input
+                  name="icsUrl"
+                  placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
+                  Subscribe
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <h3 className="text-sm font-medium">Your bookings as a calendar</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Subscribe to this feed in your calendar app and your bookings show up there —
+            cancellations disappear automatically. <span className="text-gray-600">Outlook</span>:
+            Add calendar → Subscribe from web. <span className="text-gray-600">Apple Calendar</span>:
+            File → New Calendar Subscription. <span className="text-gray-600">Google</span>: Other
+            calendars → From URL. Note: calendar apps refresh subscriptions on their own schedule
+            (Outlook can take a few hours).
+          </p>
+          <code className="block mt-2 text-xs bg-gray-50 border border-gray-200 rounded-md p-2 break-all select-all">
+            {`${process.env.APP_URL}/api/feed/${host.feed_token}.ics`}
+          </code>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold">Local calendar agent</h2>
+          {agents.length > 0 &&
+            (agents.some((a) => a.connected) ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                Connected
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                Offline
+              </span>
+            ))}
+        </div>
+        {agents.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No agent has synced yet. Install the Mac agent and use the API token below.
+          </p>
+        ) : (
+          <ul className="text-sm text-gray-600 mt-1">
+            {agents.map((a) => (
+              <li key={a.source}>
+                <span className="font-mono">{a.source}</span>: {a.blocks} busy blocks · last
+                check-in {a.agoLabel} ({a.lastLabel})
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-3 flex items-center gap-3">
+          <a
+            href="/api/agent/download"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+          >
+            Download Mac agent
+          </a>
+          <div className="text-xs text-gray-400 space-y-1">
+            <p>
+              Pre-configured with your token. Unzip and open BookingAgent; when macOS blocks
+              it, click Done, then System Settings → Privacy &amp; Security → “Open Anyway”
+              (first launch only), and allow Calendar access.
+            </p>
+            <p>
+              If “Open Anyway” is blocked (managed Macs), run this in Terminal, then open the
+              app again:{" "}
+              <code className="font-mono bg-gray-50 border border-gray-200 rounded px-1">
+                xattr -dr com.apple.quarantine ~/Downloads/BookingAgent*/BookingAgent.app
+              </code>
+            </p>
+          </div>
+        </div>
+        <details className="mt-2">
+          <summary className="text-sm text-blue-600 cursor-pointer">Show API token</summary>
+          <code className="block mt-1 text-xs bg-gray-50 border border-gray-200 rounded-md p-2 break-all">
+            {host.api_token}
+          </code>
+        </details>
+      </section>
+    </main>
+  );
+}

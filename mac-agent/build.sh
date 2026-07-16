@@ -22,12 +22,20 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>LSUIElement</key><true/>
     <key>NSCalendarsUsageDescription</key>
-    <string>Reads your calendar busy times to block them on your booking page.</string>
+    <string>Reads your calendar busy times to block them on your booking page, and adds new bookings to your calendar.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Reads your calendar busy times to block them on your booking page.</string>
+    <string>Reads your calendar busy times to block them on your booking page, and adds new bookings to your calendar.</string>
 </dict>
 </plist>
 EOF
 
-codesign --force --deep -s - "$APP"
+# Prefer a stable signing identity: TCC ties the calendar permission to the
+# signature, and ad-hoc signatures change every build.
+IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/ {print $2; exit}')
+if [ -n "$IDENTITY" ]; then
+  codesign --force --deep -s "$IDENTITY" "$APP"
+  echo "Signed with: $IDENTITY"
+else
+  codesign --force --deep -s - "$APP"
+fi
 echo "Built $PWD/$APP"
