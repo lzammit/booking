@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import db, { Booking, EventType, Host, setSetting, signupCode } from "./db";
+import db, { adminCode, Booking, EventType, Host, setSetting, signupCode } from "./db";
 import { getSession, requireAdmin, requireHost } from "./session";
 import { sendAdminPromotionEmail, sendBookingEmails, sendInviteEmail } from "./email";
 import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
@@ -34,8 +34,12 @@ export async function signup(formData: FormData) {
   if (!parsed.success) redirect("/signup?error=Invalid+form+data");
   const { name, email, password, timezone, invite } = parsed.data;
 
+  // The admin onboarding code grants admin and always suffices on its own;
+  // otherwise the regular signup code is enforced when one is set.
+  const adminOnboard = adminCode();
   const requiredCode = signupCode();
-  if (requiredCode && invite !== requiredCode) {
+  const isAdminSignup = Boolean(adminOnboard) && invite === adminOnboard;
+  if (!isAdminSignup && requiredCode && invite !== requiredCode) {
     redirect("/signup?error=Invalid+invite+code");
   }
 
@@ -58,9 +62,17 @@ export async function signup(formData: FormData) {
   try {
     const res = db
       .prepare(
-        "INSERT INTO hosts (email, name, slug, password_hash, timezone, api_token) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO hosts (email, name, slug, password_hash, timezone, api_token, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(email.toLowerCase(), name, slug, hash, timezone, randomBytes(24).toString("hex"));
+      .run(
+        email.toLowerCase(),
+        name,
+        slug,
+        hash,
+        timezone,
+        randomBytes(24).toString("hex"),
+        isAdminSignup ? 1 : 0
+      );
     hostId = Number(res.lastInsertRowid);
   } catch {
     redirect("/signup?error=Email+already+registered");
@@ -295,6 +307,19 @@ export async function adminDeleteHost(formData: FormData) {
   }
   // Foreign keys cascade: event types, availability, bookings, tokens, busy data.
   db.prepare("DELETE FROM hosts WHERE id = ?").run(id);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminSetAdminCode(formData: FormData) {
+  await requireAdmin();
+  const code = String(formData.get("code") ?? "").trim();
+  if (code && !/^[\x20-\x7E]{6,60}$/.test(code)) {
+    redirect(
+      "/dashboard/admin?error=" +
+        encodeURIComponent("Admin code must be 6-60 plain characters (or empty to disable)")
+    );
+  }
+  setSetting("admin_code", code);
   redirect("/dashboard/admin?saved=1");
 }
 

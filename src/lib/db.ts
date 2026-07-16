@@ -148,6 +148,15 @@ export function signupCode(): string {
   return getSetting("signup_code") ?? process.env.SIGNUP_CODE ?? "";
 }
 
+/**
+ * Special onboarding code that grants admin on signup. Empty string means no
+ * admin code is set (nobody can self-onboard as admin). Distinct from the
+ * regular signup code.
+ */
+export function adminCode(): string {
+  return getSetting("admin_code") ?? "";
+}
+
 export interface Host {
   id: number;
   email: string;

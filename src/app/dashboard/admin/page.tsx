@@ -1,10 +1,11 @@
 import { DateTime } from "luxon";
-import db, { signupCode } from "@/lib/db";
+import db, { adminCode, signupCode } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import {
   adminDeleteHost,
   adminInviteUser,
   adminResetPassword,
+  adminSetAdminCode,
   adminSetSignupCode,
   adminToggleAdmin,
 } from "@/lib/actions";
@@ -124,6 +125,44 @@ export default async function AdminPage({
             Generate new
           </button>
         </form>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Admin onboarding code</h2>
+        <p className="text-sm text-gray-500">
+          Anyone who signs up with this code becomes an admin. Keep it secret;
+          share it only with people who should manage the app. Leave empty to
+          disable self-onboarding as admin.
+        </p>
+        <form action={adminSetAdminCode} className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            name="code"
+            defaultValue={adminCode()}
+            placeholder="Empty = disabled"
+            className="w-64 rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-sm"
+          />
+          <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+            Save
+          </button>
+          <button
+            formAction={async (fd: FormData) => {
+              "use server";
+              fd.set("code", "adm-" + crypto.randomUUID().replace(/-/g, "").slice(0, 16));
+              await adminSetAdminCode(fd);
+            }}
+            className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm hover:bg-gray-50"
+          >
+            Generate new
+          </button>
+        </form>
+        {adminCode() && (
+          <p className="mt-3 text-xs text-gray-400">
+            Onboarding link (email &amp; code pre-filled on signup):{" "}
+            <code className="break-all">
+              {process.env.APP_URL}/signup?invite={encodeURIComponent(adminCode())}
+            </code>
+          </p>
+        )}
       </section>
 
       <div className="space-y-4">

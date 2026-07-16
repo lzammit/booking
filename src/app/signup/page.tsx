@@ -9,7 +9,10 @@ export default async function SignupPage({
   searchParams: Promise<{ error?: string; invite?: string; email?: string }>;
 }) {
   const { error, invite, email } = await searchParams;
-  const needsInvite = Boolean(signupCode());
+  // Show the code field when a signup code is required, or when the visitor
+  // arrived with a code in the link (e.g. an admin onboarding link) so it can
+  // be submitted even if regular signup is otherwise open.
+  const needsInvite = Boolean(signupCode()) || Boolean(invite);
   return (
     <main className="flex-1 flex items-center justify-center p-8">
       <form action={signup} className="w-full max-w-sm space-y-4">

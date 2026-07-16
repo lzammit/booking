@@ -11,8 +11,8 @@ for (const line of fs.readFileSync(path.join(__dirname, "..", ".env"), "utf8").s
   if (m) env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
 
-const to = process.argv[2] || "luzammi@akamai.com";
-const from = env.SMTP_FROM || "booking@packetfence.net";
+const to = process.argv[2] || "you@example.com";
+const from = env.SMTP_FROM || "Booking <booking@example.com>";
 const fromEmail = from.match(/<([^>]+)>/)?.[1] ?? from;
 
 const t = nodemailer.createTransport({
@@ -31,14 +31,14 @@ function icsUtc(uid, summary) {
     "PRODID:-//booking//EN",
     "METHOD:REQUEST",
     "BEGIN:VEVENT",
-    `UID:${uid}@booking.packetfence.net`,
+    `UID:${uid}@booking.example.com`,
     `DTSTAMP:${stamp}`,
     "DTSTART:20260720T190000Z",
     "DTEND:20260720T193000Z",
     `SUMMARY:${summary}`,
     "DESCRIPTION:Invite structure test",
     `ORGANIZER;CN=Booking:mailto:${fromEmail}`,
-    `ATTENDEE;CN=Ludovic Zammit;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${to}`,
+    `ATTENDEE;CN=Test Recipient;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${to}`,
     "TRANSP:OPAQUE",
     "STATUS:CONFIRMED",
     "SEQUENCE:0",
@@ -72,13 +72,13 @@ function icsWebexStyle(uid, summary) {
     "END:VTIMEZONE",
     "BEGIN:VEVENT",
     `DTSTAMP:${stamp}`,
-    `ATTENDEE;CN="Ludovic Zammit";ROLE=REQ-PARTICIPANT;RSVP=TRUE:MAILTO:${to}`,
+    `ATTENDEE;CN="Test Recipient";ROLE=REQ-PARTICIPANT;RSVP=TRUE:MAILTO:${to}`,
     `ORGANIZER;CN="Booking":MAILTO:${fromEmail}`,
     "DTSTART;TZID=America/New_York:20260720T150000",
     "DTEND;TZID=America/New_York:20260720T153000",
     "TRANSP:OPAQUE",
     "SEQUENCE:0",
-    `UID:${uid}@booking.packetfence.net`,
+    `UID:${uid}@booking.example.com`,
     "DESCRIPTION:Invite structure test",
     `SUMMARY:${summary}`,
     "PRIORITY:5",
