@@ -6,9 +6,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Project notes
 
-Calendly-style booking app. Source lives on the Mac; deploys to the `calendar` Linode
-(`rsync` to /opt/booking/app, build + `systemctl restart booking` via `cc-run` in the
-user's tmux). Live at https://booking.packetfence.net.
+Calendly-style booking app (Next.js + SQLite). Deploys to a single VM under
+systemd, behind Caddy for HTTPS; see `docs/ARCHITECTURE.md` for the full setup.
 
 ## Design system ("circadian" identity — public pages)
 
