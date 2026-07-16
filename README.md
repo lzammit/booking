@@ -12,6 +12,11 @@ core value.
 > circadian scale (dawn coral → noon gold → dusk violet) by its local hour, so a
 > visitor scanning for "a morning slot" sees it before reading a single number.
 
+![The booking page: a month calendar with the first available day selected and
+time slots colour-coded by time of day](docs/screenshots/event-page.png)
+
+<p align="center"><em>Picking a time — slots are tinted morning → midday → evening.</em></p>
+
 ---
 
 ## Features
@@ -134,9 +139,12 @@ Pick whichever fits your setup — they're independent:
 
 ### As a visitor (booking someone)
 
-Open their link → pick a highlighted day → pick a time (colour tells you morning
-/ midday / evening) → enter name, company, and email → confirm. A confirmation
-email with a calendar invite follows, including a link to cancel.
+Open their link → pick a meeting type → the calendar opens on the first
+available day → pick a time (colour tells you morning / midday / evening) → enter
+name, company, and email → confirm. A confirmation email with a calendar invite
+follows, including a link to cancel.
+
+![A host's booking page listing their meeting types](docs/screenshots/host-page.png)
 
 ### As an admin
 

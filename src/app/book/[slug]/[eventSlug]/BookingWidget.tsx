@@ -84,6 +84,15 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
     return map;
   }, [slots]);
 
+  // Land the visitor on the first day that has availability (like Calendly),
+  // rather than an empty "choose a day" state — but don't override a choice
+  // they've already made or a month they've navigated to on purpose.
+  useEffect(() => {
+    if (selectedDay || selectedSlot || slots === null) return;
+    const firstOpen = [...slotsByDay.keys()].sort()[0];
+    if (firstOpen) setSelectedDay(firstOpen);
+  }, [slots, slotsByDay, selectedDay, selectedSlot]);
+
   const monthLabel = monthStart.toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
