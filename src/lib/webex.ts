@@ -1,27 +1,32 @@
-import db from "./db";
+import db, { getSetting } from "./db";
 
 /**
  * Cisco Webex meeting integration.
- * Fully optional: if the env vars are missing or a host hasn't connected
- * their Webex account, every function degrades to a no-op — bookings still
- * succeed, just without a generated meeting link.
+ * Fully optional: if the integration isn't configured or a host hasn't
+ * connected their Webex account, every function degrades to a no-op —
+ * bookings still succeed, just without a generated meeting link.
  *
- * Setup: register an OAuth integration at https://developer.webex.com/my-apps
- * with redirect URI <APP_URL>/api/webex/callback and scopes
- * "meeting:schedules_read meeting:schedules_write spark:people_read".
- * Set WEBEX_CLIENT_ID and WEBEX_CLIENT_SECRET.
+ * The OAuth integration's client credentials come from the admin UI
+ * (settings table), falling back to WEBEX_CLIENT_ID / WEBEX_CLIENT_SECRET
+ * env vars. Register the integration at https://developer.webex.com/my-apps
+ * with the redirect URI from webexRedirectUri() and the scopes in SCOPES.
  */
 
-const CLIENT_ID = process.env.WEBEX_CLIENT_ID;
-const CLIENT_SECRET = process.env.WEBEX_CLIENT_SECRET;
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
-const SCOPES =
+export const WEBEX_SCOPES =
   "spark:people_read meeting:schedules_read meeting:schedules_write";
 const API = "https://webexapis.com/v1";
 
+function clientId(): string {
+  return getSetting("webex_client_id") ?? process.env.WEBEX_CLIENT_ID ?? "";
+}
+function clientSecret(): string {
+  return getSetting("webex_client_secret") ?? process.env.WEBEX_CLIENT_SECRET ?? "";
+}
+
 export function webexConfigured(): boolean {
-  return Boolean(CLIENT_ID && CLIENT_SECRET);
+  return Boolean(clientId() && clientSecret());
 }
 
 export function webexRedirectUri(): string {
@@ -30,10 +35,10 @@ export function webexRedirectUri(): string {
 
 export function webexAuthUrl(state: string): string {
   const params = new URLSearchParams({
-    client_id: CLIENT_ID!,
+    client_id: clientId(),
     response_type: "code",
     redirect_uri: webexRedirectUri(),
-    scope: SCOPES,
+    scope: WEBEX_SCOPES,
     state,
   });
   return `${API}/authorize?${params}`;
@@ -52,8 +57,8 @@ async function tokenRequest(body: Record<string, string>) {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: CLIENT_ID!,
-      client_secret: CLIENT_SECRET!,
+      client_id: clientId(),
+      client_secret: clientSecret(),
       ...body,
     }),
   });

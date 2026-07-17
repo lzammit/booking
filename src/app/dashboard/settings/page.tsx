@@ -1,9 +1,16 @@
 import { DateTime } from "luxon";
 import db from "@/lib/db";
 import { requireHost } from "@/lib/session";
-import { disconnectMicrosoft, disconnectWebex, subscribeIcsFeed, unsubscribeIcsFeed } from "@/lib/actions";
+import {
+  adminConfigureWebex,
+  disconnectMicrosoft,
+  disconnectWebex,
+  subscribeIcsFeed,
+  unsubscribeIcsFeed,
+} from "@/lib/actions";
 import { msAccountFor, msConfigured } from "@/lib/msgraph";
-import { webexAccountFor, webexConfigured } from "@/lib/webex";
+import { webexAccountFor, webexConfigured, webexRedirectUri, WEBEX_SCOPES } from "@/lib/webex";
+import WebexConnectButton from "../WebexConnectButton";
 import SignatureCard from "../SignatureCard";
 
 export default async function SettingsPage({
@@ -56,11 +63,13 @@ export default async function SettingsPage({
           <div>
             <h2 className="font-semibold">Webex meetings</h2>
             <p className="text-sm text-gray-500">
-              {!webexConfigured()
-                ? "Webex integration not configured on the server."
-                : webexAccount
+              {webexConfigured()
+                ? webexAccount
                   ? `Connected as ${webexAccount}. Each booking creates a Webex meeting; the join link goes in both invites.`
-                  : "Connect your Webex account so every booking gets its own Webex meeting link."}
+                  : "Connect your Webex account so every booking gets its own Webex meeting link. Sign in with your usual Akamai SSO in the popup."
+                : host.is_admin
+                  ? "Not set up yet. Configure the Webex integration once, then each host connects their own account."
+                  : "Not set up yet — ask an admin to configure the Webex integration."}
             </p>
           </div>
           {webexConfigured() &&
@@ -71,14 +80,68 @@ export default async function SettingsPage({
                 </button>
               </form>
             ) : (
-              <a
-                href="/api/webex/connect"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-              >
-                Connect
-              </a>
+              <WebexConnectButton />
             ))}
         </div>
+
+        {!webexConfigured() && host.is_admin === 1 && (
+          <details className="mt-3 border-t border-gray-100 pt-3">
+            <summary className="cursor-pointer text-sm font-medium text-blue-600">
+              Configure Webex integration
+            </summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-600">
+              <li>
+                Open{" "}
+                <a
+                  href="https://developer.webex.com/my-apps/new/integration"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  developer.webex.com → Create an Integration
+                </a>
+                .
+              </li>
+              <li>
+                Redirect URI:{" "}
+                <code className="break-all rounded bg-gray-50 px-1">{webexRedirectUri()}</code>
+              </li>
+              <li>
+                Scopes:{" "}
+                <code className="break-all rounded bg-gray-50 px-1">{WEBEX_SCOPES}</code>
+              </li>
+              <li>Paste the generated Client ID and Secret below.</li>
+            </ol>
+            <form action={adminConfigureWebex} className="mt-3 space-y-2">
+              <input
+                name="client_id"
+                required
+                placeholder="Client ID"
+                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-sm"
+              />
+              <input
+                name="client_secret"
+                required
+                type="password"
+                placeholder="Client Secret"
+                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-sm"
+              />
+              <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+                Save integration
+              </button>
+            </form>
+          </details>
+        )}
+
+        {webexConfigured() && host.is_admin === 1 && (
+          <form action={adminConfigureWebex} className="mt-3 border-t border-gray-100 pt-3">
+            <input type="hidden" name="client_id" value="" />
+            <input type="hidden" name="client_secret" value="" />
+            <button className="text-xs text-gray-400 hover:text-red-600">
+              Remove Webex integration
+            </button>
+          </form>
+        )}
       </section>
 
       <section className="rounded-xl border border-gray-200 p-4">

@@ -2,10 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { currentHost, getSession } from "@/lib/session";
 import { webexExchangeCode } from "@/lib/webex";
 
-export async function GET(req: NextRequest) {
+/** Small HTML page that closes the popup and refreshes the Settings tab. */
+function popupClose(status: "connected" | "error", message?: string): NextResponse {
   const appUrl = process.env.APP_URL || "http://localhost:3000";
+  const fallback = `${appUrl}/dashboard/settings?webex=${status}`;
+  const body = `<!doctype html><meta charset="utf-8"><title>Webex</title>
+<body style="font-family:system-ui;padding:2rem;color:#1c2333;background:#fbfaf7">
+<p>${status === "connected" ? "Webex connected. You can close this window." : "Webex connection failed" + (message ? ": " + message : "") + "."}</p>
+<script>
+  try {
+    if (window.opener) { window.opener.location.href = ${JSON.stringify(fallback)}; window.close(); }
+    else { window.location.href = ${JSON.stringify(fallback)}; }
+  } catch (e) { window.location.href = ${JSON.stringify(fallback)}; }
+</script>
+</body>`;
+  return new NextResponse(body, {
+    status: status === "connected" ? 200 : 400,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
+export async function GET(req: NextRequest) {
   const host = await currentHost();
-  if (!host) return NextResponse.redirect(new URL("/login", appUrl));
+  if (!host) return popupClose("error", "not logged in");
 
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
@@ -17,13 +36,13 @@ export async function GET(req: NextRequest) {
 
   if (errorDesc || !code || !state || !expected || state !== expected) {
     console.error("Webex OAuth callback error:", errorDesc || "state mismatch");
-    return NextResponse.redirect(new URL("/dashboard/settings?webex=error", appUrl));
+    return popupClose("error", errorDesc || "authorization was denied");
   }
   try {
     await webexExchangeCode(host.id, code);
   } catch (err) {
     console.error("Webex code exchange failed:", err);
-    return NextResponse.redirect(new URL("/dashboard/settings?webex=error", appUrl));
+    return popupClose("error", "token exchange failed");
   }
-  return NextResponse.redirect(new URL("/dashboard/settings?webex=connected", appUrl));
+  return popupClose("connected");
 }

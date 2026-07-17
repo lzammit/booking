@@ -294,6 +294,21 @@ export async function disconnectWebex() {
   redirect("/dashboard/settings?webex=disconnected");
 }
 
+export async function adminConfigureWebex(formData: FormData) {
+  await requireAdmin();
+  const clientId = String(formData.get("client_id") ?? "").trim();
+  const clientSecret = String(formData.get("client_secret") ?? "").trim();
+  if (!clientId || !clientSecret) {
+    // Empty values clear the integration.
+    setSetting("webex_client_id", "");
+    setSetting("webex_client_secret", "");
+    redirect("/dashboard/settings?webex=cleared");
+  }
+  setSetting("webex_client_id", clientId);
+  setSetting("webex_client_secret", clientSecret);
+  redirect("/dashboard/settings?webex=configured");
+}
+
 export async function disconnectMicrosoft() {
   const host = await requireHost();
   msDisconnect(host.id);
