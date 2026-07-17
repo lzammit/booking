@@ -1,6 +1,11 @@
 import db, { EventType } from "@/lib/db";
 import { requireHost } from "@/lib/session";
-import { createEventType, deleteEventType, updateEventType } from "@/lib/actions";
+import {
+  createEventType,
+  deleteEventType,
+  toggleEventTypeActive,
+  updateEventType,
+} from "@/lib/actions";
 
 function Fields({ et }: { et?: EventType }) {
   return (
@@ -81,12 +86,6 @@ function Fields({ et }: { et?: EventType }) {
           every booking’s calendar invite and emails as the join link.
         </span>
       </label>
-      {et && (
-        <label className="col-span-2 flex items-center gap-2 text-sm">
-          <input type="checkbox" name="active" defaultChecked={et.active === 1} />
-          Active (visible on your booking page)
-        </label>
-      )}
     </div>
   );
 }
@@ -134,6 +133,14 @@ export default async function EventTypesPage({
                 Delete
               </button>
             </div>
+          </form>
+          <form action={toggleEventTypeActive} className="mt-3 border-t border-gray-100 pt-3">
+            <input type="hidden" name="id" value={et.id} />
+            <button className="text-sm text-gray-600 hover:text-black">
+              {et.active === 1
+                ? "Deactivate — hide from your booking page"
+                : "Activate — show on your booking page"}
+            </button>
           </form>
         </details>
       ))}

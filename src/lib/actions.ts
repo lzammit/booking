@@ -260,11 +260,12 @@ export async function updateEventType(formData: FormData) {
   const parsed = eventTypeSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/dashboard/event-types?error=Invalid+form+data");
   const d = parsed.data;
-  const active = formData.get("active") === "on" ? 1 : 0;
+  // Note: active is NOT touched here — it's a separate, explicit toggle so
+  // editing fields can never silently hide an event from the booking page.
   db.prepare(
-    `UPDATE event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, active=?, meeting_url=?
+    `UPDATE event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, meeting_url=?
      WHERE id = ? AND host_id = ?`
-  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, active, d.meeting_url, id, host.id);
+  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url, id, host.id);
   redirect("/dashboard/event-types");
 }
 
@@ -272,6 +273,15 @@ export async function deleteEventType(formData: FormData) {
   const host = await requireHost();
   const id = Number(formData.get("id"));
   db.prepare("DELETE FROM event_types WHERE id = ? AND host_id = ?").run(id, host.id);
+  redirect("/dashboard/event-types");
+}
+
+export async function toggleEventTypeActive(formData: FormData) {
+  const host = await requireHost();
+  const id = Number(formData.get("id"));
+  db.prepare(
+    "UPDATE event_types SET active = 1 - active WHERE id = ? AND host_id = ?"
+  ).run(id, host.id);
   redirect("/dashboard/event-types");
 }
 
