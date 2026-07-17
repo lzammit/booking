@@ -6,6 +6,7 @@ import db, { Booking, EventType, Host } from "@/lib/db";
 import { isSlotFree } from "@/lib/slots";
 import { sendBookingEmails } from "@/lib/email";
 import { createOutlookEvent } from "@/lib/msgraph";
+import { createWebexMeeting } from "@/lib/webex";
 
 const bookSchema = z.object({
   eventTypeId: z.number().int(),
@@ -74,15 +75,31 @@ export async function POST(req: NextRequest) {
       endIso,
       cancelToken
     );
-  const booking = db
+  let booking = db
     .prepare("SELECT * FROM bookings WHERE id = ?")
     .get(Number(res.lastInsertRowid)) as Booking;
 
   // Best-effort side effects; the booking stands even if these fail.
+  // Create the Webex meeting first so its link can ride along in the emails.
+  const webex = await createWebexMeeting({
+    hostId: host.id,
+    title: `${eventType.name} — ${host.name} / ${input.name}`,
+    agenda: `${input.notes ? input.notes + "\n\n" : ""}Guest: ${input.name} (${input.company}) <${input.email}>`,
+    startUtc: startIso,
+    endUtc: endIso,
+    guestEmail: input.email,
+  });
+  if (webex) {
+    db.prepare(
+      "UPDATE bookings SET webex_link = ?, webex_meeting_id = ? WHERE id = ?"
+    ).run(webex.link, webex.meetingId, booking.id);
+    booking = { ...booking, webex_link: webex.link, webex_meeting_id: webex.meetingId };
+  }
+
   const msEventId = await createOutlookEvent({
     hostId: host.id,
     subject: `${input.company} - ${input.name}`,
-    body: `${input.notes ? input.notes + "\n\n" : ""}Booked via ${process.env.APP_URL || "booking app"}. Guest: ${input.name} (${input.company}) <${input.email}>`,
+    body: `${input.notes ? input.notes + "\n\n" : ""}${booking.webex_link ? `Join Webex: ${booking.webex_link}\n\n` : ""}Booked via ${process.env.APP_URL || "booking app"}. Guest: ${input.name} (${input.company}) <${input.email}>`,
     startUtc: startIso,
     endUtc: endIso,
     guestName: input.name,

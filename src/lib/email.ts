@@ -51,7 +51,10 @@ function buildIcs(
     `DTSTART:${fmt(booking.start_utc)}`,
     `DTEND:${fmt(booking.end_utc)}`,
     `SUMMARY:${icsEscape(summary)}`,
-    `DESCRIPTION:${icsEscape(`${booking.notes ? booking.notes + "\n\n" : ""}Cancel: ${cancelUrl}`)}`,
+    `DESCRIPTION:${icsEscape(
+      `${booking.notes ? booking.notes + "\n\n" : ""}${booking.webex_link ? `Join Webex: ${booking.webex_link}\n\n` : ""}Cancel: ${cancelUrl}`
+    )}`,
+    ...(booking.webex_link ? [`LOCATION:${icsEscape(booking.webex_link)}`, `URL:${booking.webex_link}`] : []),
     `ORGANIZER;CN=${icsEscape(organizer.name)}:mailto:${organizer.email}`,
     `ATTENDEE;CN=${icsEscape(attendee.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee.email}`,
     "TRANSP:OPAQUE",
@@ -131,6 +134,7 @@ export async function sendBookingEmails(
     .setZone(host.timezone)
     .toFormat("cccc, LLLL d yyyy 'at' h:mm a (ZZZZ)");
   const cancelUrl = `${APP_URL}/cancel/${booking.cancel_token}`;
+  const joinLine = booking.webex_link ? `\nJoin Webex: ${booking.webex_link}` : "";
   const method = kind === "confirmed" ? "REQUEST" : "CANCEL";
   // The host's invite (and email subject) leads with who's coming:
   // "<Company> - <Guest name>". The guest's invite leads with the meeting.
@@ -165,7 +169,7 @@ export async function sendBookingEmails(
           : `Cancelled: ${subjectBase}`,
       text:
         kind === "confirmed"
-          ? `Hi ${booking.guest_name},\n\nYour booking is confirmed.\n\nWhat: ${subjectBase} (${eventType.duration_min} min)\nWhen: ${startGuest}\n\nNeed to cancel? ${cancelUrl}\n`
+          ? `Hi ${booking.guest_name},\n\nYour booking is confirmed.\n\nWhat: ${subjectBase} (${eventType.duration_min} min)\nWhen: ${startGuest}${joinLine}\n\nNeed to cancel? ${cancelUrl}\n`
           : `Hi ${booking.guest_name},\n\nThis booking has been cancelled.\n\nWhat: ${subjectBase}\nWhen: ${startGuest}\n`,
       alternatives: icsFor(
         subjectBase,
@@ -180,7 +184,7 @@ export async function sendBookingEmails(
       subject: kind === "confirmed" ? hostSummary : `Cancelled: ${hostSummary}`,
       text:
         kind === "confirmed"
-          ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> booked "${eventType.name}".\n\nWhen: ${startHost}\nNotes: ${booking.notes || "(none)"}\n`
+          ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> booked "${eventType.name}".\n\nWhen: ${startHost}${joinLine}\nNotes: ${booking.notes || "(none)"}\n`
           : `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> — booking "${eventType.name}" on ${startHost} was cancelled.\n`,
       alternatives: icsFor(hostSummary, system, { name: host.name, email: host.email }),
       headers: calendarHeaders,

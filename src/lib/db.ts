@@ -83,7 +83,21 @@ function createDb() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS webex_tokens (
+      host_id INTEGER PRIMARY KEY REFERENCES hosts(id) ON DELETE CASCADE,
+      account_email TEXT NOT NULL DEFAULT '',
+      access_token TEXT NOT NULL,
+      refresh_token TEXT NOT NULL,
+      expires_at INTEGER NOT NULL -- unix seconds
+    );
   `);
+  const bookingCols2 = db.prepare("PRAGMA table_info(bookings)").all() as { name: string }[];
+  if (!bookingCols2.some((c) => c.name === "webex_link")) {
+    db.exec("ALTER TABLE bookings ADD COLUMN webex_link TEXT");
+  }
+  if (!bookingCols2.some((c) => c.name === "webex_meeting_id")) {
+    db.exec("ALTER TABLE bookings ADD COLUMN webex_meeting_id TEXT");
+  }
   // Seed the signup code from the env once, so it becomes UI-manageable.
   if (
     process.env.SIGNUP_CODE &&
@@ -210,5 +224,7 @@ export interface Booking {
   status: string;
   cancel_token: string;
   ms_event_id: string | null;
+  webex_link: string | null;
+  webex_meeting_id: string | null;
   created_at: string;
 }

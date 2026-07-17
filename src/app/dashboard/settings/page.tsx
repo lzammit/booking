@@ -1,8 +1,9 @@
 import { DateTime } from "luxon";
 import db from "@/lib/db";
 import { requireHost } from "@/lib/session";
-import { disconnectMicrosoft, subscribeIcsFeed, unsubscribeIcsFeed } from "@/lib/actions";
+import { disconnectMicrosoft, disconnectWebex, subscribeIcsFeed, unsubscribeIcsFeed } from "@/lib/actions";
 import { msAccountFor, msConfigured } from "@/lib/msgraph";
+import { webexAccountFor, webexConfigured } from "@/lib/webex";
 import SignatureCard from "../SignatureCard";
 
 export default async function SettingsPage({
@@ -13,6 +14,7 @@ export default async function SettingsPage({
   const { error } = await searchParams;
   const host = await requireHost();
   const msAccount = msAccountFor(host.id);
+  const webexAccount = webexAccountFor(host.id);
   const agentSync = db
     .prepare("SELECT source, blocks, last_sync FROM agent_syncs WHERE host_id = ?")
     .all(host.id) as { source: string; blocks: number; last_sync: string }[];
@@ -47,6 +49,36 @@ export default async function SettingsPage({
           Add this to your email signature so people can book you in one click.
         </p>
         <SignatureCard bookingUrl={`${process.env.APP_URL}/book/${host.slug}`} />
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">Webex meetings</h2>
+            <p className="text-sm text-gray-500">
+              {!webexConfigured()
+                ? "Webex integration not configured on the server."
+                : webexAccount
+                  ? `Connected as ${webexAccount}. Each booking creates a Webex meeting; the join link goes in both invites.`
+                  : "Connect your Webex account so every booking gets its own Webex meeting link."}
+            </p>
+          </div>
+          {webexConfigured() &&
+            (webexAccount ? (
+              <form action={disconnectWebex}>
+                <button className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50">
+                  Disconnect
+                </button>
+              </form>
+            ) : (
+              <a
+                href="/api/webex/connect"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              >
+                Connect
+              </a>
+            ))}
+        </div>
       </section>
 
       <section className="rounded-xl border border-gray-200 p-4">

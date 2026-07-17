@@ -18,6 +18,7 @@ import { getSession, requireAdmin, requireHost } from "./session";
 import { sendAdminPromotionEmail, sendBookingEmails, sendInviteEmail } from "./email";
 import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
+import { deleteWebexMeeting, webexDisconnect } from "./webex";
 
 function slugify(s: string): string {
   return s
@@ -280,10 +281,17 @@ export async function cancelBookingAsHost(formData: FormData) {
       .prepare("SELECT * FROM event_types WHERE id = ?")
       .get(booking.event_type_id) as EventType;
     if (booking.ms_event_id) await deleteOutlookEvent(host.id, booking.ms_event_id);
+    if (booking.webex_meeting_id) await deleteWebexMeeting(host.id, booking.webex_meeting_id);
     await sendBookingEmails({ ...booking, status: "cancelled" }, host, eventType, "cancelled");
   }
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+export async function disconnectWebex() {
+  const host = await requireHost();
+  webexDisconnect(host.id);
+  redirect("/dashboard/settings?webex=disconnected");
 }
 
 export async function disconnectMicrosoft() {

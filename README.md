@@ -36,6 +36,9 @@ time slots colour-coded by time of day](docs/screenshots/event-page.png)
      only start/end times leave your Mac).
   3. **ICS subscription feed** — subscribe any calendar app to a secret URL.
 - **Email confirmations** to guest and host with `.ics` attachments, via SMTP.
+- **Optional Webex meetings** — connect a Webex account and each booking
+  schedules a real Webex meeting, with the join link in both invites, both
+  emails, the calendar feed, and the local calendar event.
 - **Cancellation** — self-service guest cancel links; freed slots reopen
   automatically.
 - **Admin console** — manage users, roles, password resets, the signup
@@ -174,6 +177,7 @@ required.
 | `SIGNUP_CODE` | | Seeds the signup invitation code (afterwards managed in the admin UI). Empty = open signup. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | | SMTP for confirmation and invitation emails. Without these, bookings still work; emails are skipped. |
 | `MS_TENANT_ID` / `MS_CLIENT_ID` / `MS_CLIENT_SECRET` | | Optional Microsoft 365 (Graph) calendar sync. Superseded in practice by the macOS agent and ICS feed. |
+| `WEBEX_CLIENT_ID` / `WEBEX_CLIENT_SECRET` | | Optional Webex meetings. Register an OAuth integration at developer.webex.com (redirect `<APP_URL>/api/webex/callback`); hosts connect from Settings. A corporate Webex org may require admin approval. |
 | `AGENT_ZIP` | | Path to the prebuilt agent zip served from Settings (default `/opt/booking/agent/BookingAgent.app.zip`). |
 
 See [`.env.example`](.env.example) for a copyable template.

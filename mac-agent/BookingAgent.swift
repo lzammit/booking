@@ -305,6 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let guestName: String
         let guestEmail: String
         let notes: String
+        let location: String?
     }
 
     private struct BookingsResponse: Decodable {
@@ -392,18 +393,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 continue
             }
 
+            let location = (booking.location?.isEmpty == false) ? booking.location : nil
             let notes = [
                 "\(booking.guestName) <\(booking.guestEmail)>",
                 booking.notes.isEmpty ? nil : "Notes: \(booking.notes)",
+                location.map { "Join Webex: \($0)" },
             ].compactMap { $0 }.joined(separator: "\n")
 
             if let event = existing {
                 if event.title != booking.summary || event.startDate != start
-                    || event.endDate != end || event.notes != notes {
+                    || event.endDate != end || event.notes != notes || event.location != location {
                     event.title = booking.summary
                     event.startDate = start
                     event.endDate = end
                     event.notes = notes
+                    event.location = location
+                    if let location, let url = URL(string: location) { event.url = url }
                     try? store.save(event, span: .thisEvent, commit: true)
                 }
                 applied += 1
@@ -414,6 +419,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 event.startDate = start
                 event.endDate = end
                 event.notes = notes
+                event.location = location
+                if let location, let url = URL(string: location) { event.url = url }
                 do {
                     try store.save(event, span: .thisEvent, commit: true)
                     if let identifier = event.eventIdentifier {

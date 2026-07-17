@@ -20,6 +20,7 @@ interface AgentBooking {
   guestName: string;
   guestEmail: string;
   notes: string;
+  location: string;
 }
 
 export async function GET(req: NextRequest) {
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
     guestName: b.guest_name,
     guestEmail: b.guest_email,
     notes: b.notes || "",
+    location: b.webex_link || "",
   }));
 
   return NextResponse.json({ bookings });

@@ -69,6 +69,7 @@ export async function GET(
     const description =
       `${b.guest_name} <${b.guest_email}>` +
       (b.notes ? `\n${b.notes}` : "") +
+      (b.webex_link ? `\nJoin Webex: ${b.webex_link}` : "") +
       `\nCancel: ${APP_URL}/cancel/${b.cancel_token}`;
     lines.push(
       "BEGIN:VEVENT",
@@ -78,6 +79,7 @@ export async function GET(
       `DTEND:${fmt(b.end_utc)}`,
       `SUMMARY:${icsEscape(summary)}`,
       `DESCRIPTION:${icsEscape(description)}`,
+      ...(b.webex_link ? [`LOCATION:${icsEscape(b.webex_link)}`, `URL:${b.webex_link}`] : []),
       "STATUS:CONFIRMED",
       "END:VEVENT"
     );

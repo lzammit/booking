@@ -112,6 +112,7 @@ Eight tables (`src/lib/db.ts`). Foreign keys cascade on host deletion.
 | `availability_rules` | Weekly hours | `weekday` (1–7), `start_min`, `end_min` (minutes from midnight, host tz) |
 | `bookings` | The bookings | `guest_name`, `guest_email`, `guest_company`, `guest_timezone`, `start_utc`, `end_utc`, `status`, `cancel_token`, `ms_event_id` |
 | `ms_tokens` | Microsoft 365 OAuth tokens | per host, refresh handled lazily |
+| `webex_tokens` | Webex OAuth tokens | per host, refresh handled lazily |
 | `external_busy` | Busy intervals pushed by agents | `source`, `start_utc`, `end_utc` |
 | `agent_syncs` | Agent heartbeat | `source`, `last_sync`, `blocks` (drives the "Connected/Offline" badge) |
 | `settings` | Key/value app settings | `signup_code`, `admin_code`, `admin_code_enabled` |
@@ -170,7 +171,8 @@ The ICS feed and agent-pull authenticate differently on purpose:
 | Route | Auth | Purpose |
 |---|---|---|
 | `GET /api/slots` | none | Available slots for an event type over a date range. |
-| `POST /api/book` | none | Create a booking (re-validates availability, sends emails, optional M365 event). |
+| `POST /api/book` | none | Create a booking (re-validates availability, schedules an optional Webex meeting, sends emails, optional M365 event). |
+| `GET /api/webex/connect`, `GET /api/webex/callback` | session | Webex OAuth flow (optional). |
 | `GET /api/feed/[token]` | URL token | Host's bookings as a subscribable ICS calendar. |
 | `POST /api/busy` | Bearer (api_token) | Agent pushes busy intervals + heartbeat. |
 | `GET /api/agent/bookings` | Bearer (api_token) | Agent pulls bookings to reconcile locally. |
