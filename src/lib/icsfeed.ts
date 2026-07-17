@@ -15,12 +15,51 @@ const SOURCE = "ics-feed";
 /** Earlier deploys stored the Outlook-specific source name. */
 const LEGACY_SOURCES = ["outlook-feed"];
 
+/**
+ * SSRF guard for host-supplied feed URLs: require https and reject IP-literal
+ * or obviously-internal hostnames, so the server can't be pointed at
+ * localhost, the cloud metadata service, or other private endpoints.
+ * (DNS-rebinding-grade attacks are out of scope for this threat model.)
+ */
+function assertPublicFeedUrl(raw: string) {
+  const u = new URL(raw);
+  if (u.protocol !== "https:") throw new Error("ICS feed URL must be https");
+  const h = u.hostname.toLowerCase();
+  if (
+    h === "localhost" ||
+    h.endsWith(".localhost") ||
+    h.endsWith(".local") ||
+    h.endsWith(".internal") ||
+    h.startsWith("[") || // IPv6 literal
+    /^\d+\.\d+\.\d+\.\d+$/.test(h) // IPv4 literal (public ones excluded too — real feeds use hostnames)
+  ) {
+    throw new Error("ICS feed URL must use a public hostname");
+  }
+}
+
+/** Fetch with redirects followed manually so every hop is SSRF-checked. */
+async function fetchPublic(url: string): Promise<Response> {
+  let target = url;
+  for (let hop = 0; hop < 5; hop++) {
+    assertPublicFeedUrl(target);
+    const res = await fetch(target, {
+      signal: AbortSignal.timeout(20000),
+      redirect: "manual",
+    });
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      if (!location) throw new Error(`ICS feed redirect without location`);
+      target = new URL(location, target).toString();
+      continue;
+    }
+    return res;
+  }
+  throw new Error("ICS feed: too many redirects");
+}
+
 /** Fetch the feed and replace this host's stored busy intervals. */
 export async function refreshIcsFeed(hostId: number, url: string): Promise<number> {
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(20000),
-    redirect: "follow",
-  });
+  const res = await fetchPublic(url);
   if (!res.ok) throw new Error(`ICS feed returned HTTP ${res.status}`);
   const text = await res.text();
   if (!text.includes("BEGIN:VCALENDAR")) throw new Error("Not an ICS calendar");

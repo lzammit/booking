@@ -22,7 +22,12 @@ function transport() {
 }
 
 function icsEscape(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+  return s
+    .replace(/\r/g, "") // bare CR could smuggle new ICS lines past \n escaping
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\n/g, "\\n");
 }
 
 interface IcsParty {

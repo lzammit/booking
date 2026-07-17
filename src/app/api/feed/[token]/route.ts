@@ -18,6 +18,7 @@ const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
 function icsEscape(s: string): string {
   return s
+    .replace(/\r/g, "") // bare CR could smuggle new ICS lines past \n escaping
     .replace(/\\/g, "\\\\")
     .replace(/;/g, "\\;")
     .replace(/,/g, "\\,")

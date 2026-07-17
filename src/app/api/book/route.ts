@@ -7,18 +7,27 @@ import { isSlotFree } from "@/lib/slots";
 import { sendBookingEmails } from "@/lib/email";
 import { createOutlookEvent } from "@/lib/msgraph";
 import { createWebexMeeting } from "@/lib/webex";
+import { cleanText, clientIp, rateLimit } from "@/lib/ratelimit";
 
 const bookSchema = z.object({
   eventTypeId: z.number().int(),
   start: z.string(),
-  name: z.string().min(1).max(120),
-  company: z.string().min(1).max(120),
+  name: z.string().min(1).max(120).transform(cleanText).refine((s) => s.length > 0),
+  company: z.string().min(1).max(120).transform(cleanText).refine((s) => s.length > 0),
   email: z.string().email().max(200),
-  notes: z.string().max(2000).default(""),
+  notes: z.string().max(2000).transform(cleanText).default(""),
   timezone: z.string().max(60).default("UTC"),
 });
 
 export async function POST(req: NextRequest) {
+  // Bookings send email and consume the host's availability — throttle per IP.
+  if (!rateLimit(`book:${clientIp(req.headers)}`, 10, 10 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Too many booking attempts — please try again in a few minutes." },
+      { status: 429 }
+    );
+  }
+
   let input;
   try {
     input = bookSchema.parse(await req.json());

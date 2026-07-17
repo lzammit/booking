@@ -1,6 +1,7 @@
 "use server";
 
-import { randomBytes } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
@@ -19,6 +20,19 @@ import { sendAdminPromotionEmail, sendBookingEmails, sendInviteEmail } from "./e
 import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
 import { deleteWebexMeeting, webexDisconnect } from "./webex";
+import { cleanText, clientIp, rateLimit } from "./ratelimit";
+
+/** Constant-time string comparison (via digests, so lengths may differ). */
+function safeEqual(a: string, b: string): boolean {
+  return timingSafeEqual(
+    createHash("sha256").update(a).digest(),
+    createHash("sha256").update(b).digest()
+  );
+}
+
+async function requestIp(): Promise<string> {
+  return clientIp(await headers());
+}
 
 function slugify(s: string): string {
   return s
@@ -31,7 +45,7 @@ function slugify(s: string): string {
 }
 
 const signupSchema = z.object({
-  name: z.string().min(1).max(80),
+  name: z.string().min(1).max(80).transform(cleanText).refine((s) => s.length > 0),
   email: z.string().email().max(200),
   password: z.string().min(8).max(200),
   timezone: z.string().min(1).max(60),
@@ -39,6 +53,11 @@ const signupSchema = z.object({
 });
 
 export async function signup(formData: FormData) {
+  // Throttle account creation and invite-code guessing.
+  if (!rateLimit(`signup:${await requestIp()}`, 5, 60 * 60 * 1000)) {
+    redirect("/signup?error=" + encodeURIComponent("Too many attempts — try again later"));
+  }
+
   const parsed = signupSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/signup?error=Invalid+form+data");
   const { name, email, password, timezone, invite } = parsed.data;
@@ -48,8 +67,11 @@ export async function signup(formData: FormData) {
   const adminOnboard = adminCode();
   const requiredCode = signupCode();
   const isAdminSignup =
-    adminCodeEnabled() && Boolean(adminOnboard) && invite === adminOnboard;
-  if (!isAdminSignup && requiredCode && invite !== requiredCode) {
+    adminCodeEnabled() &&
+    Boolean(adminOnboard) &&
+    Boolean(invite) &&
+    safeEqual(invite!, adminOnboard);
+  if (!isAdminSignup && requiredCode && !safeEqual(invite ?? "", requiredCode)) {
     redirect("/signup?error=Invalid+invite+code");
   }
 
@@ -106,6 +128,14 @@ export async function signup(formData: FormData) {
 export async function login(formData: FormData) {
   const email = String(formData.get("email") || "").toLowerCase();
   const password = String(formData.get("password") || "");
+  // Throttle brute force: per IP, and per target account across IPs.
+  const ip = await requestIp();
+  if (
+    !rateLimit(`login:${ip}`, 10, 15 * 60 * 1000) ||
+    !rateLimit(`login-email:${email}`, 20, 15 * 60 * 1000)
+  ) {
+    redirect("/login?error=" + encodeURIComponent("Too many attempts — try again later"));
+  }
   const host = db
     .prepare("SELECT * FROM hosts WHERE email = ?")
     .get(email) as Host | undefined;
