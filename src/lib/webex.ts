@@ -14,8 +14,12 @@ import db, { getSetting } from "./db";
 
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
+// Minimal, self-scoped: create/cancel your own meetings, and read them back.
+// (No people/directory scope — keeps the consent screen benign for corporate
+// approval. Without it /people/me can't return the email, so the connected
+// account shows as "Connected" rather than by address.)
 export const WEBEX_SCOPES =
-  "spark:people_read meeting:schedules_read meeting:schedules_write";
+  "meeting:schedules_write meeting:schedules_read";
 const API = "https://webexapis.com/v1";
 
 function clientId(): string {

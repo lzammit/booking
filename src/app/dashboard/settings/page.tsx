@@ -65,7 +65,7 @@ export default async function SettingsPage({
             <p className="text-sm text-gray-500">
               {webexConfigured()
                 ? webexAccount
-                  ? `Connected as ${webexAccount}. Each booking creates a Webex meeting; the join link goes in both invites.`
+                  ? `${webexAccount === "connected" ? "Connected" : `Connected as ${webexAccount}`}. Each booking creates a Webex meeting; the join link goes in both invites.`
                   : "Connect your Webex account so every booking gets its own Webex meeting link. Sign in with your usual Akamai SSO in the popup."
                 : host.is_admin
                   ? "Not set up yet. Configure the Webex integration once, then each host connects their own account."
