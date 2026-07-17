@@ -94,6 +94,14 @@ export async function POST(req: NextRequest) {
       "UPDATE bookings SET webex_link = ?, webex_meeting_id = ? WHERE id = ?"
     ).run(webex.link, webex.meetingId, booking.id);
     booking = { ...booking, webex_link: webex.link, webex_meeting_id: webex.meetingId };
+  } else if (eventType.meeting_url) {
+    // No dynamic meeting (Webex not connected) — fall back to the event
+    // type's static meeting link. No meeting_id: there's nothing to cancel.
+    db.prepare("UPDATE bookings SET webex_link = ? WHERE id = ?").run(
+      eventType.meeting_url,
+      booking.id
+    );
+    booking = { ...booking, webex_link: eventType.meeting_url };
   }
 
   const msEventId = await createOutlookEvent({

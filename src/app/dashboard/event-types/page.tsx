@@ -67,6 +67,20 @@ function Fields({ et }: { et?: EventType }) {
           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
         />
       </label>
+      <label className="col-span-2 text-sm">
+        Meeting link (optional)
+        <input
+          name="meeting_url"
+          type="url"
+          defaultValue={et?.meeting_url}
+          placeholder="https://acme.webex.com/meet/you"
+          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+        />
+        <span className="mt-1 block text-xs text-gray-400">
+          Paste your Webex Personal Room (or Zoom/Teams/Meet) link — it goes in
+          every booking’s calendar invite and emails as the join link.
+        </span>
+      </label>
       {et && (
         <label className="col-span-2 flex items-center gap-2 text-sm">
           <input type="checkbox" name="active" defaultChecked={et.active === 1} />

@@ -36,9 +36,14 @@ time slots colour-coded by time of day](docs/screenshots/event-page.png)
      only start/end times leave your Mac).
   3. **ICS subscription feed** — subscribe any calendar app to a secret URL.
 - **Email confirmations** to guest and host with `.ics` attachments, via SMTP.
-- **Optional Webex meetings** — connect a Webex account and each booking
-  schedules a real Webex meeting, with the join link in both invites, both
-  emails, the calendar feed, and the local calendar event.
+- **Meeting links** — every booking can carry a join link, added to both
+  invites, both emails, the calendar feed, and the local calendar event. Two
+  ways to supply it:
+  - a **meeting-link field per event type** (paste any Webex Personal Room /
+    Zoom / Teams / Meet URL) — zero setup, works anywhere; or
+  - **connect a Webex account** so each booking schedules a *unique* Webex
+    meeting via the API (needs a Webex OAuth integration, and a corporate org
+    may require admin approval — the static field is the reliable fallback).
 - **Cancellation** — self-service guest cancel links; freed slots reopen
   automatically.
 - **Admin console** — manage users, roles, password resets, the signup

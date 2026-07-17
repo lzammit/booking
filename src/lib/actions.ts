@@ -227,6 +227,12 @@ const eventTypeSchema = z.object({
   buffer_min: z.coerce.number().int().min(0).max(120).default(0),
   min_notice_min: z.coerce.number().int().min(0).max(10080).default(120),
   window_days: z.coerce.number().int().min(1).max(365).default(30),
+  meeting_url: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === "" || /^https?:\/\//.test(v), "Must be a URL")
+    .default(""),
 });
 
 export async function createEventType(formData: FormData) {
@@ -242,9 +248,9 @@ export async function createEventType(formData: FormData) {
   const base = slug;
   while (taken.get(host.id, slug)) slug = `${base}-${n++}`;
   db.prepare(
-    `INSERT INTO event_types (host_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(host.id, d.name, slug, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days);
+    `INSERT INTO event_types (host_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days, meeting_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(host.id, d.name, slug, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url);
   redirect("/dashboard/event-types");
 }
 
@@ -256,9 +262,9 @@ export async function updateEventType(formData: FormData) {
   const d = parsed.data;
   const active = formData.get("active") === "on" ? 1 : 0;
   db.prepare(
-    `UPDATE event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, active=?
+    `UPDATE event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, active=?, meeting_url=?
      WHERE id = ? AND host_id = ?`
-  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, active, id, host.id);
+  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, active, d.meeting_url, id, host.id);
   redirect("/dashboard/event-types");
 }
 

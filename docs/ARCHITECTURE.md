@@ -171,7 +171,7 @@ The ICS feed and agent-pull authenticate differently on purpose:
 | Route | Auth | Purpose |
 |---|---|---|
 | `GET /api/slots` | none | Available slots for an event type over a date range. |
-| `POST /api/book` | none | Create a booking (re-validates availability, schedules an optional Webex meeting, sends emails, optional M365 event). |
+| `POST /api/book` | none | Create a booking (re-validates availability; sets the join link from a connected Webex account's new meeting, else the event type's static meeting link; sends emails; optional M365 event). |
 | `GET /api/webex/connect`, `GET /api/webex/callback` | session | Webex OAuth flow (optional). |
 | `GET /api/feed/[token]` | URL token | Host's bookings as a subscribable ICS calendar. |
 | `POST /api/busy` | Bearer (api_token) | Agent pushes busy intervals + heartbeat. |

@@ -118,6 +118,10 @@ function createDb() {
   if (!hostCols.some((c) => c.name === "is_admin")) {
     db.exec("ALTER TABLE hosts ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
   }
+  const etCols = db.prepare("PRAGMA table_info(event_types)").all() as { name: string }[];
+  if (!etCols.some((c) => c.name === "meeting_url")) {
+    db.exec("ALTER TABLE event_types ADD COLUMN meeting_url TEXT NOT NULL DEFAULT ''");
+  }
   if (!hostCols.some((c) => c.name === "ics_url")) {
     db.exec("ALTER TABLE hosts ADD COLUMN ics_url TEXT");
   }
@@ -200,6 +204,7 @@ export interface EventType {
   min_notice_min: number;
   window_days: number;
   active: number;
+  meeting_url: string;
 }
 
 export interface AvailabilityRule {
