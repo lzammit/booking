@@ -1,21 +1,33 @@
 import { DateTime, Interval } from "luxon";
-import db from "./db";
+import db, { getSetting } from "./db";
 
 /**
  * Microsoft 365 calendar integration via Microsoft Graph.
- * Fully optional: if the env vars are missing or a host has not connected
- * their account, every function degrades to a no-op.
+ * Fully optional: if the integration isn't configured or a host hasn't
+ * connected their account, every function degrades to a no-op.
+ *
+ * Client credentials come from the admin UI (settings table), falling back to
+ * MS_CLIENT_ID / MS_CLIENT_SECRET / MS_TENANT_ID env vars. Register an app at
+ * https://portal.azure.com (Azure AD → App registrations) with the redirect
+ * URI from msRedirectUri() and the delegated scopes in MS_SCOPES.
  */
 
-const TENANT = process.env.MS_TENANT_ID || "common";
-const CLIENT_ID = process.env.MS_CLIENT_ID;
-const CLIENT_SECRET = process.env.MS_CLIENT_SECRET;
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
-const SCOPES = "offline_access User.Read Calendars.ReadWrite";
+export const MS_SCOPES = "offline_access User.Read Calendars.ReadWrite";
+
+function tenant(): string {
+  return getSetting("ms_tenant_id") || process.env.MS_TENANT_ID || "common";
+}
+function clientId(): string {
+  return getSetting("ms_client_id") ?? process.env.MS_CLIENT_ID ?? "";
+}
+function clientSecret(): string {
+  return getSetting("ms_client_secret") ?? process.env.MS_CLIENT_SECRET ?? "";
+}
 
 export function msConfigured(): boolean {
-  return Boolean(CLIENT_ID && CLIENT_SECRET);
+  return Boolean(clientId() && clientSecret());
 }
 
 export function msRedirectUri(): string {
@@ -24,14 +36,14 @@ export function msRedirectUri(): string {
 
 export function msAuthUrl(state: string): string {
   const params = new URLSearchParams({
-    client_id: CLIENT_ID!,
+    client_id: clientId(),
     response_type: "code",
     redirect_uri: msRedirectUri(),
     response_mode: "query",
-    scope: SCOPES,
+    scope: MS_SCOPES,
     state,
   });
-  return `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/authorize?${params}`;
+  return `https://login.microsoftonline.com/${tenant()}/oauth2/v2.0/authorize?${params}`;
 }
 
 interface TokenRow {
@@ -44,14 +56,14 @@ interface TokenRow {
 
 async function tokenRequest(body: Record<string, string>) {
   const res = await fetch(
-    `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`,
+    `https://login.microsoftonline.com/${tenant()}/oauth2/v2.0/token`,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: CLIENT_ID!,
-        client_secret: CLIENT_SECRET!,
-        scope: SCOPES,
+        client_id: clientId(),
+        client_secret: clientSecret(),
+        scope: MS_SCOPES,
         ...body,
       }),
     }

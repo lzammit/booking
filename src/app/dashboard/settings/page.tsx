@@ -2,15 +2,16 @@ import { DateTime } from "luxon";
 import db from "@/lib/db";
 import { requireHost } from "@/lib/session";
 import {
+  adminConfigureMicrosoft,
   adminConfigureWebex,
   disconnectMicrosoft,
   disconnectWebex,
   subscribeIcsFeed,
   unsubscribeIcsFeed,
 } from "@/lib/actions";
-import { msAccountFor, msConfigured } from "@/lib/msgraph";
+import { msAccountFor, msConfigured, msRedirectUri, MS_SCOPES } from "@/lib/msgraph";
 import { webexAccountFor, webexConfigured, webexRedirectUri, WEBEX_SCOPES } from "@/lib/webex";
-import WebexConnectButton from "../WebexConnectButton";
+import PopupConnectButton from "../PopupConnectButton";
 import SignatureCard from "../SignatureCard";
 
 export default async function SettingsPage({
@@ -80,7 +81,7 @@ export default async function SettingsPage({
                 </button>
               </form>
             ) : (
-              <WebexConnectButton />
+              <PopupConnectButton path="/api/webex/connect" />
             ))}
         </div>
 
@@ -149,11 +150,13 @@ export default async function SettingsPage({
           <div>
             <h2 className="font-semibold">Microsoft 365 calendar</h2>
             <p className="text-sm text-gray-500">
-              {!msConfigured()
-                ? "Graph API not configured on the server — use the calendar feed below or the Mac agent instead."
-                : msAccount
-                  ? `Connected as ${msAccount}. Busy times are blocked; bookings appear in Outlook.`
-                  : "Connect to block your busy times and create Outlook events on booking."}
+              {msConfigured()
+                ? msAccount
+                  ? `${msAccount === "connected" ? "Connected" : `Connected as ${msAccount}`}. Busy times are blocked; bookings appear in Outlook.`
+                  : "Connect to block your busy times and create Outlook events on booking. Sign in with your usual Akamai SSO in the popup."
+                : host.is_admin
+                  ? "Not set up yet. Configure the Microsoft 365 app once, then each host connects their own account."
+                  : "Not set up yet — ask an admin to configure the Microsoft 365 integration."}
             </p>
           </div>
           {msConfigured() &&
@@ -164,14 +167,73 @@ export default async function SettingsPage({
                 </button>
               </form>
             ) : (
-              <a
-                href="/api/ms/connect"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-              >
-                Connect
-              </a>
+              <PopupConnectButton path="/api/ms/connect" />
             ))}
         </div>
+
+        {!msConfigured() && host.is_admin === 1 && (
+          <details className="mt-3 border-t border-gray-100 pt-3">
+            <summary className="cursor-pointer text-sm font-medium text-blue-600">
+              Configure Microsoft 365 integration
+            </summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-600">
+              <li>
+                Open{" "}
+                <a
+                  href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  Azure Portal → App registrations → New registration
+                </a>
+                .
+              </li>
+              <li>
+                Redirect URI (type <em>Web</em>):{" "}
+                <code className="break-all rounded bg-gray-50 px-1">{msRedirectUri()}</code>
+              </li>
+              <li>
+                Add a client secret, and delegated Graph permissions:{" "}
+                <code className="break-all rounded bg-gray-50 px-1">{MS_SCOPES}</code>
+              </li>
+              <li>Paste the Application (client) ID, secret, and tenant ID below.</li>
+            </ol>
+            <form action={adminConfigureMicrosoft} className="mt-3 space-y-2">
+              <input
+                name="client_id"
+                required
+                placeholder="Application (client) ID"
+                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-sm"
+              />
+              <input
+                name="client_secret"
+                required
+                type="password"
+                placeholder="Client secret value"
+                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-sm"
+              />
+              <input
+                name="tenant_id"
+                placeholder="Tenant ID (or leave blank for 'common')"
+                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-sm"
+              />
+              <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+                Save integration
+              </button>
+            </form>
+          </details>
+        )}
+
+        {msConfigured() && host.is_admin === 1 && (
+          <form action={adminConfigureMicrosoft} className="mt-3 border-t border-gray-100 pt-3">
+            <input type="hidden" name="client_id" value="" />
+            <input type="hidden" name="client_secret" value="" />
+            <button className="text-xs text-gray-400 hover:text-red-600">
+              Remove Microsoft 365 integration
+            </button>
+          </form>
+        )}
 
         <div className="mt-4 border-t border-gray-100 pt-4">
           <h3 className="text-sm font-medium">Calendar feed (ICS)</h3>

@@ -325,6 +325,23 @@ export async function adminConfigureWebex(formData: FormData) {
   redirect("/dashboard/settings?webex=configured");
 }
 
+export async function adminConfigureMicrosoft(formData: FormData) {
+  await requireAdmin();
+  const clientId = String(formData.get("client_id") ?? "").trim();
+  const clientSecret = String(formData.get("client_secret") ?? "").trim();
+  const tenantId = String(formData.get("tenant_id") ?? "").trim() || "common";
+  if (!clientId || !clientSecret) {
+    setSetting("ms_client_id", "");
+    setSetting("ms_client_secret", "");
+    setSetting("ms_tenant_id", "");
+    redirect("/dashboard/settings?ms=cleared");
+  }
+  setSetting("ms_client_id", clientId);
+  setSetting("ms_client_secret", clientSecret);
+  setSetting("ms_tenant_id", tenantId);
+  redirect("/dashboard/settings?ms=configured");
+}
+
 export async function disconnectMicrosoft() {
   const host = await requireHost();
   msDisconnect(host.id);
