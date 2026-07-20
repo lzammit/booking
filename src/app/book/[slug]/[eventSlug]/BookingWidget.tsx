@@ -324,6 +324,20 @@ export default function BookingWidget({
               </option>
             ))}
           </select>
+          {tz !== browserTz && (
+            <button
+              type="button"
+              onClick={() => {
+                setTz(browserTz);
+                setSelectedDay(null);
+                setSelectedSlot(null);
+              }}
+              title={`Back to your timezone (${browserTz.replace(/_/g, " ")})`}
+              className="rounded-full border border-ink/15 px-2.5 py-1 text-[11px] uppercase tracking-wide text-ink/60 hover:border-ink hover:text-ink"
+            >
+              ↺ reset
+            </button>
+          )}
           {tz !== hostTimezone && (
             <span className="text-ink/40">
               · {hostName}: {hostTimezone.replace(/_/g, " ")}
