@@ -43,6 +43,7 @@ export default async function EventBookingPage({
           durationMin={eventType.duration_min}
           windowDays={eventType.window_days}
           hostName={host.name}
+          hostTimezone={host.timezone}
         />
       </div>
     </main>

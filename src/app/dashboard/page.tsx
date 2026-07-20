@@ -37,6 +37,14 @@ export default async function DashboardPage({
       .setZone(host.timezone)
       .toFormat("ccc, LLL d yyyy · h:mm a");
 
+  /** The guest's local time, when it differs from the host's. */
+  const guestTime = (b: Booking): string | null => {
+    if (!b.guest_timezone || b.guest_timezone === host.timezone) return null;
+    const dt = DateTime.fromISO(b.start_utc, { zone: "utc" }).setZone(b.guest_timezone);
+    if (!dt.isValid) return null;
+    return `${dt.toFormat("h:mm a")} for them (${b.guest_timezone.replace(/_/g, " ")})`;
+  };
+
   return (
     <main className="space-y-8">
       <div className="flex items-center justify-between">
@@ -95,7 +103,11 @@ export default async function DashboardPage({
                     )}
                   </div>
                   <div className="text-sm text-gray-500">
-                    {fmt(b.start_utc)} · {b.guest_email}
+                    {fmt(b.start_utc)}
+                    {guestTime(b) && (
+                      <span className="text-gray-400"> · {guestTime(b)}</span>
+                    )}{" "}
+                    · {b.guest_email}
                     {b.notes && <> · “{b.notes}”</>}
                   </div>
                 </div>

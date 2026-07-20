@@ -16,6 +16,7 @@ interface Props {
   durationMin: number;
   windowDays: number;
   hostName: string;
+  hostTimezone: string;
 }
 
 const DAWN: [number, number, number] = [240, 152, 126]; // 06:00
@@ -36,11 +37,46 @@ function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export default function BookingWidget({ eventTypeId, durationMin, hostName }: Props) {
-  const tz = useMemo(
+/** Date + clock parts of a UTC instant, as seen in a given IANA timezone. */
+function zonedParts(iso: string, tz: string): { ymd: string; hour: number; minute: number } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date(iso))
+      .map((p) => [p.type, p.value])
+  );
+  return {
+    ymd: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+  };
+}
+
+export default function BookingWidget({
+  eventTypeId,
+  durationMin,
+  hostName,
+  hostTimezone,
+}: Props) {
+  const browserTz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     []
   );
+  const [tz, setTz] = useState(browserTz);
+  const zones = useMemo(() => {
+    try {
+      return Intl.supportedValuesOf("timeZone");
+    } catch {
+      return [...new Set([browserTz, hostTimezone, "UTC"])];
+    }
+  }, [browserTz, hostTimezone]);
   const today = useMemo(() => new Date(), []);
   const [monthStart, setMonthStart] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1)
@@ -76,13 +112,13 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
   const slotsByDay = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const iso of slots ?? []) {
-      const day = ymd(new Date(iso));
+      const day = zonedParts(iso, tz).ymd;
       const list = map.get(day) ?? [];
       list.push(iso);
       map.set(day, list);
     }
     return map;
-  }, [slots]);
+  }, [slots, tz]);
 
   // Land the visitor on the first day that has availability (like Calendly),
   // rather than an empty "choose a day" state — but don't override a choice
@@ -116,15 +152,16 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
     return out;
   }, [monthStart]);
 
-  const timeLabel = (iso: string) =>
+  const timeLabel = (iso: string, zone: string = tz) =>
     new Date(iso).toLocaleTimeString(undefined, {
       hour: "numeric",
       minute: "2-digit",
+      timeZone: zone,
     });
 
   const slotColor = (iso: string) => {
-    const d = new Date(iso);
-    return circadian(d.getHours() + d.getMinutes() / 60);
+    const p = zonedParts(iso, tz);
+    return circadian(p.hour + p.minute / 60);
   };
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -177,11 +214,17 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
             day: "numeric",
             hour: "numeric",
             minute: "2-digit",
+            timeZone: tz,
           })}
         </p>
+        {tz !== hostTimezone && (
+          <p className="mt-1 font-mono text-xs text-ink/50">
+            = {timeLabel(confirmed.start, hostTimezone)} for {hostName} ({hostTimezone})
+          </p>
+        )}
         <p className="mt-2 text-sm text-ink/60">
-          {durationMin} minutes with {hostName}, in your timezone ({tz}). A
-          confirmation email with a calendar invite is on its way.
+          {durationMin} minutes with {hostName}, shown in {tz}. A confirmation
+          email with a calendar invite is on its way.
         </p>
       </div>
     );
@@ -263,9 +306,30 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
             Loading availability…
           </p>
         )}
-        <p className="mt-4 font-mono text-xs text-ink/40">
-          Times shown in {tz}
-        </p>
+        <label className="mt-4 flex flex-wrap items-center gap-2 font-mono text-xs text-ink/40">
+          Times shown in
+          <select
+            value={tz}
+            onChange={(e) => {
+              setTz(e.target.value);
+              // Day boundaries shift with the zone — re-pick the first open day.
+              setSelectedDay(null);
+              setSelectedSlot(null);
+            }}
+            className="max-w-full rounded-lg border border-ink/15 bg-white px-2 py-1 font-mono text-xs text-ink"
+          >
+            {zones.map((z) => (
+              <option key={z} value={z}>
+                {z.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+          {tz !== hostTimezone && (
+            <span className="text-ink/40">
+              · {hostName}: {hostTimezone.replace(/_/g, " ")}
+            </span>
+          )}
+        </label>
         <div className="mt-6 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-ink/50">
           <span className="h-2 w-2 rounded-full" style={{ background: circadian(8) }} />
           morning
@@ -280,21 +344,28 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
         {selectedDay && !selectedSlot && (
           <div>
             <h3 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-ink/60">
-              {new Date(selectedDay + "T12:00:00").toLocaleDateString(undefined, {
+              {new Date(selectedDay + "T12:00:00Z").toLocaleDateString(undefined, {
                 weekday: "long",
                 month: "long",
                 day: "numeric",
+                timeZone: "UTC",
               })}
             </h3>
             <div className="mt-3 max-h-96 space-y-2 overflow-y-auto pr-1">
               {(slotsByDay.get(selectedDay) ?? []).map((iso, i) => {
                 const c = slotColor(iso);
+                const differs = tz !== hostTimezone;
                 return (
                   <button
                     key={iso}
                     type="button"
                     onClick={() => setSelectedSlot(iso)}
                     style={{ "--slot-i": i } as React.CSSProperties}
+                    title={
+                      differs
+                        ? `${timeLabel(iso, hostTimezone)} for ${hostName}`
+                        : undefined
+                    }
                     className="slot-cascade group flex w-full items-center gap-3 rounded-lg border border-ink/10 bg-white px-4 py-2.5 text-left font-mono text-sm tabular-nums text-ink transition hover:border-ink"
                   >
                     <span
@@ -303,10 +374,20 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
                       style={{ background: c }}
                     />
                     {timeLabel(iso)}
+                    {differs && (
+                      <span className="ml-auto text-xs text-ink/35">
+                        {timeLabel(iso, hostTimezone)}
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
+            {tz !== hostTimezone && (
+              <p className="mt-2 font-mono text-[11px] text-ink/40">
+                Grey time = {hostName}&rsquo;s ({hostTimezone.replace(/_/g, " ")})
+              </p>
+            )}
           </div>
         )}
 
@@ -324,8 +405,14 @@ export default function BookingWidget({ eventTypeId, durationMin, hostName }: Pr
                 day: "numeric",
                 hour: "numeric",
                 minute: "2-digit",
+                timeZone: tz,
               })}
             </h3>
+            {tz !== hostTimezone && (
+              <p className="font-mono text-xs text-ink/50">
+                = {timeLabel(selectedSlot, hostTimezone)} for {hostName}
+              </p>
+            )}
             <input
               name="name"
               required
