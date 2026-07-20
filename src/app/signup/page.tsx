@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { signup } from "@/lib/actions";
 import { signupCode } from "@/lib/db";
+import { pickLocale, t } from "@/lib/i18n";
 import TimezoneField from "./TimezoneField";
 
 export default async function SignupPage({
@@ -9,6 +11,7 @@ export default async function SignupPage({
   searchParams: Promise<{ error?: string; invite?: string; email?: string }>;
 }) {
   const { error, invite, email } = await searchParams;
+  const locale = pickLocale((await headers()).get("accept-language"));
   // Show the code field when a signup code is required, or when the visitor
   // arrived with a code in the link (e.g. an admin onboarding link) so it can
   // be submitted even if regular signup is otherwise open.
@@ -16,7 +19,7 @@ export default async function SignupPage({
   return (
     <main className="flex-1 flex items-center justify-center p-8">
       <form action={signup} className="w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-bold">Create your account</h1>
+        <h1 className="text-2xl font-bold">{t(locale, "signup_title")}</h1>
         {error && (
           <p className="rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
             {error}
@@ -25,7 +28,7 @@ export default async function SignupPage({
         <input
           name="name"
           required
-          placeholder="Full name"
+          placeholder={t(locale, "fullName")}
           className="w-full rounded-lg border border-gray-300 px-3 py-2"
         />
         <input
@@ -33,7 +36,7 @@ export default async function SignupPage({
           type="email"
           required
           defaultValue={email}
-          placeholder="Email"
+          placeholder={t(locale, "email")}
           className="w-full rounded-lg border border-gray-300 px-3 py-2"
         />
         <input
@@ -41,26 +44,26 @@ export default async function SignupPage({
           type="password"
           required
           minLength={8}
-          placeholder="Password (8+ characters)"
+          placeholder={t(locale, "passwordHint")}
           className="w-full rounded-lg border border-gray-300 px-3 py-2"
         />
-        <TimezoneField />
+        <TimezoneField hintTemplate={t(locale, "tzHint", { tz: "{tz}" })} />
         {needsInvite && (
           <input
             name="invite"
             required
             defaultValue={invite}
-            placeholder="Invite code"
+            placeholder={t(locale, "inviteCode")}
             className="w-full rounded-lg border border-gray-300 px-3 py-2"
           />
         )}
         <button className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-white font-medium hover:bg-blue-700">
-          Sign up
+          {t(locale, "signUp")}
         </button>
         <p className="text-sm text-gray-500">
-          Already have an account?{" "}
+          {t(locale, "haveAccount")}{" "}
           <Link href="/login" className="text-blue-600 hover:underline">
-            Log in
+            {t(locale, "logIn")}
           </Link>
         </p>
       </form>

@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { DateTime } from "luxon";
 import { Booking, EventType, Host } from "./db";
+import { Locale, LOCALES, t as tr } from "./i18n";
 
 /**
  * SMTP email with .ics attachments. Optional: if SMTP_HOST is unset,
@@ -132,14 +133,30 @@ export async function sendBookingEmails(
     return;
   }
   const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  // The guest's copy speaks their language (stored at booking time).
+  const guestLocale: Locale = LOCALES.includes(booking.guest_locale as Locale)
+    ? (booking.guest_locale as Locale)
+    : "en";
   const startGuest = DateTime.fromISO(booking.start_utc, { zone: "utc" })
     .setZone(booking.guest_timezone)
-    .toFormat("cccc, LLLL d yyyy 'at' h:mm a (ZZZZ)");
+    .setLocale(guestLocale)
+    .toLocaleString({
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
   const startHost = DateTime.fromISO(booking.start_utc, { zone: "utc" })
     .setZone(host.timezone)
     .toFormat("cccc, LLLL d yyyy 'at' h:mm a (ZZZZ)");
   const cancelUrl = `${APP_URL}/cancel/${booking.cancel_token}`;
   const joinLine = booking.webex_link ? `\nJoin Webex: ${booking.webex_link}` : "";
+  const guestJoinLine = booking.webex_link
+    ? `\n${tr(guestLocale, "mail_join", { link: booking.webex_link })}`
+    : "";
   const method = kind === "confirmed" ? "REQUEST" : "CANCEL";
   // The host's invite (and email subject) leads with who's coming:
   // "<Company> - <Guest name>". The guest's invite leads with the meeting.
@@ -170,12 +187,12 @@ export async function sendBookingEmails(
       to: booking.guest_email,
       subject:
         kind === "confirmed"
-          ? `Confirmed: ${subjectBase} — ${startGuest}`
-          : `Cancelled: ${subjectBase}`,
+          ? tr(guestLocale, "mail_confirmedSubject", { what: subjectBase, when: startGuest })
+          : tr(guestLocale, "mail_cancelledSubject", { what: subjectBase }),
       text:
         kind === "confirmed"
-          ? `Hi ${booking.guest_name},\n\nYour booking is confirmed.\n\nWhat: ${subjectBase} (${eventType.duration_min} min)\nWhen: ${startGuest}${joinLine}\n\nNeed to cancel? ${cancelUrl}\n`
-          : `Hi ${booking.guest_name},\n\nThis booking has been cancelled.\n\nWhat: ${subjectBase}\nWhen: ${startGuest}\n`,
+          ? `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_confirmedBody")}\n\n${tr(guestLocale, "mail_what", { what: subjectBase, min: eventType.duration_min })}\n${tr(guestLocale, "mail_when", { when: startGuest })}${guestJoinLine}\n\n${tr(guestLocale, "mail_cancelLink", { url: cancelUrl })}\n`
+          : `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_cancelledBody")}\n\n${tr(guestLocale, "mail_whatPlain", { what: subjectBase })}\n${tr(guestLocale, "mail_when", { when: startGuest })}\n`,
       alternatives: icsFor(
         subjectBase,
         { name: host.name, email: host.email },

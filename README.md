@@ -46,6 +46,10 @@ time slots colour-coded by time of day](docs/screenshots/event-page.png)
     may require admin approval — the static field is the reliable fallback).
 - **Cancellation** — self-service guest cancel links; freed slots reopen
   automatically.
+- **Internationalized guest experience** — the booking pages, cancel page, and
+  the guest's confirmation email follow the visitor's browser language
+  (English and French today; adding a language is a dictionary entry in
+  `src/lib/i18n.ts`).
 - **Admin console** — manage users, roles, password resets, the signup
   invitation code, and email invitations.
 - **Distinctive design** — a deliberate visual identity (see the signature idea

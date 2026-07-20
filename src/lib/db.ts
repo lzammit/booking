@@ -98,6 +98,9 @@ function createDb() {
   if (!bookingCols2.some((c) => c.name === "webex_meeting_id")) {
     db.exec("ALTER TABLE bookings ADD COLUMN webex_meeting_id TEXT");
   }
+  if (!bookingCols2.some((c) => c.name === "guest_locale")) {
+    db.exec("ALTER TABLE bookings ADD COLUMN guest_locale TEXT NOT NULL DEFAULT 'en'");
+  }
   // Seed the signup code from the env once, so it becomes UI-manageable.
   if (
     process.env.SIGNUP_CODE &&
@@ -223,6 +226,7 @@ export interface Booking {
   guest_email: string;
   guest_company: string;
   guest_timezone: string;
+  guest_locale: string;
   notes: string;
   start_utc: string;
   end_utc: string;

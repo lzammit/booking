@@ -17,13 +17,17 @@ const bookSchema = z.object({
   email: z.string().email().max(200),
   notes: z.string().max(2000).transform(cleanText).default(""),
   timezone: z.string().max(60).default("UTC"),
+  locale: z.enum(["en", "fr"]).default("en"),
 });
 
 export async function POST(req: NextRequest) {
   // Bookings send email and consume the host's availability — throttle per IP.
   if (!rateLimit(`book:${clientIp(req.headers)}`, 10, 10 * 60 * 1000)) {
     return NextResponse.json(
-      { error: "Too many booking attempts — please try again in a few minutes." },
+      {
+        error: "Too many booking attempts — please try again in a few minutes.",
+        code: "rate_limited",
+      },
       { status: 429 }
     );
   }
@@ -54,7 +58,10 @@ export async function POST(req: NextRequest) {
 
   if (!(await isSlotFree(host, eventType, startIso))) {
     return NextResponse.json(
-      { error: "That time is no longer available. Please pick another slot." },
+      {
+        error: "That time is no longer available. Please pick another slot.",
+        code: "slot_taken",
+      },
       { status: 409 }
     );
   }
@@ -69,8 +76,8 @@ export async function POST(req: NextRequest) {
   const cancelToken = randomBytes(24).toString("hex");
   const res = db
     .prepare(
-      `INSERT INTO bookings (host_id, event_type_id, guest_name, guest_email, guest_company, guest_timezone, notes, start_utc, end_utc, cancel_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO bookings (host_id, event_type_id, guest_name, guest_email, guest_company, guest_timezone, guest_locale, notes, start_utc, end_utc, cancel_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       host.id,
@@ -79,6 +86,7 @@ export async function POST(req: NextRequest) {
       input.email,
       input.company,
       tzOk,
+      input.locale,
       input.notes,
       startIso,
       endIso,

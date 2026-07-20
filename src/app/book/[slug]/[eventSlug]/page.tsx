@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { headers } from "next/headers";
 import db, { EventType, Host } from "@/lib/db";
+import { pickLocale, t } from "@/lib/i18n";
 import BookingWidget from "./BookingWidget";
 
 export default async function EventBookingPage({
@@ -9,6 +11,7 @@ export default async function EventBookingPage({
   params: Promise<{ slug: string; eventSlug: string }>;
 }) {
   const { slug, eventSlug } = await params;
+  const locale = pickLocale((await headers()).get("accept-language"));
   const host = db.prepare("SELECT * FROM hosts WHERE slug = ?").get(slug) as
     | Host
     | undefined;
@@ -24,7 +27,7 @@ export default async function EventBookingPage({
         href={`/book/${host.slug}`}
         className="font-mono text-xs uppercase tracking-[0.15em] text-ink/50 hover:text-ink"
       >
-        ← All meeting types
+        ← {t(locale, "allMeetingTypes")}
       </Link>
       <p className="mt-5 font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/50">
         {host.name}
@@ -33,7 +36,9 @@ export default async function EventBookingPage({
         {eventType.name}
       </h1>
       <p className="mt-1 text-ink/60">
-        <span className="font-mono tabular-nums">{eventType.duration_min} min</span>
+        <span className="font-mono tabular-nums">
+          {eventType.duration_min} {t(locale, "min")}
+        </span>
         {eventType.description && <> · {eventType.description}</>}
       </p>
       <div className="day-arc mt-5 w-24" />
@@ -44,6 +49,7 @@ export default async function EventBookingPage({
           windowDays={eventType.window_days}
           hostName={host.name}
           hostTimezone={host.timezone}
+          locale={locale}
         />
       </div>
     </main>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Locale, t } from "@/lib/i18n";
 
 /**
  * Client-side booking flow: month calendar → time slots → details form → done.
@@ -17,6 +18,7 @@ interface Props {
   windowDays: number;
   hostName: string;
   hostTimezone: string;
+  locale: Locale;
 }
 
 const DAWN: [number, number, number] = [240, 152, 126]; // 06:00
@@ -64,6 +66,7 @@ export default function BookingWidget({
   durationMin,
   hostName,
   hostTimezone,
+  locale,
 }: Props) {
   const browserTz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -100,7 +103,7 @@ export default function BookingWidget({
       const data = (await res.json()) as { slots: string[] };
       setSlots(data.slots);
     } catch {
-      setError("Availability didn’t load. Try again in a moment.");
+      setError(t(locale, "errLoad"));
       setSlots([]);
     }
   }, [eventTypeId, monthStart]);
@@ -129,7 +132,7 @@ export default function BookingWidget({
     if (firstOpen) setSelectedDay(firstOpen);
   }, [slots, slotsByDay, selectedDay, selectedSlot]);
 
-  const monthLabel = monthStart.toLocaleDateString(undefined, {
+  const monthLabel = monthStart.toLocaleDateString(locale, {
     month: "long",
     year: "numeric",
   });
@@ -153,7 +156,7 @@ export default function BookingWidget({
   }, [monthStart]);
 
   const timeLabel = (iso: string, zone: string = tz) =>
-    new Date(iso).toLocaleTimeString(undefined, {
+    new Date(iso).toLocaleTimeString(locale, {
       hour: "numeric",
       minute: "2-digit",
       timeZone: zone,
@@ -182,13 +185,17 @@ export default function BookingWidget({
           email: fd.get("email"),
           notes: fd.get("notes") || "",
           timezone: tz,
+          locale,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Booking failed");
+      if (!res.ok) {
+        const known = data.code === "slot_taken" || data.code === "rate_limited";
+        throw new Error(known ? t(locale, data.code) : data.error || t(locale, "errGeneric"));
+      }
       setConfirmed({ start: selectedSlot });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Booking failed");
+      setError(err instanceof Error ? err.message : t(locale, "errGeneric"));
       loadMonth();
       setSelectedSlot(null);
     } finally {
@@ -201,14 +208,14 @@ export default function BookingWidget({
     return (
       <div className="max-w-md rounded-2xl border border-ink/10 bg-white p-8">
         <div className="day-arc w-full" />
-        <h2 className="mt-6 text-2xl font-semibold text-ink">You’re booked.</h2>
+        <h2 className="mt-6 text-2xl font-semibold text-ink">{t(locale, "booked")}</h2>
         <p className="mt-3 flex items-center gap-2 font-mono text-sm text-ink">
           <span
             aria-hidden
             className="inline-block h-2.5 w-2.5 rounded-full"
             style={{ background: c }}
           />
-          {new Date(confirmed.start).toLocaleString(undefined, {
+          {new Date(confirmed.start).toLocaleString(locale, {
             weekday: "long",
             month: "long",
             day: "numeric",
@@ -219,12 +226,11 @@ export default function BookingWidget({
         </p>
         {tz !== hostTimezone && (
           <p className="mt-1 font-mono text-xs text-ink/50">
-            = {timeLabel(confirmed.start, hostTimezone)} for {hostName} ({hostTimezone})
+            {t(locale, "forHost", { time: timeLabel(confirmed.start, hostTimezone), host: hostName })} ({hostTimezone})
           </p>
         )}
         <p className="mt-2 text-sm text-ink/60">
-          {durationMin} minutes with {hostName}, shown in {tz}. A confirmation
-          email with a calendar invite is on its way.
+          {t(locale, "bookedLine", { min: durationMin, host: hostName, tz })}
         </p>
       </div>
     );
@@ -240,7 +246,7 @@ export default function BookingWidget({
               setMonthStart(new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1))
             }
             className="h-9 w-9 rounded-full border border-ink/15 text-ink hover:bg-ink hover:text-paper transition"
-            aria-label="Previous month"
+            aria-label={t(locale, "prevMonth")}
           >
             ←
           </button>
@@ -253,7 +259,7 @@ export default function BookingWidget({
               setMonthStart(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1))
             }
             className="h-9 w-9 rounded-full border border-ink/15 text-ink hover:bg-ink hover:text-paper transition"
-            aria-label="Next month"
+            aria-label={t(locale, "nextMonth")}
           >
             →
           </button>
@@ -261,7 +267,7 @@ export default function BookingWidget({
         <table className="w-full text-center text-sm">
           <thead>
             <tr className="font-mono text-[11px] uppercase text-ink/40">
-              {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+              {t(locale, "weekdaysShort").split(",").map((d) => (
                 <th key={d} className="pb-3 font-normal">
                   {d}
                 </th>
@@ -303,11 +309,11 @@ export default function BookingWidget({
         </table>
         {slots === null && (
           <p className="mt-4 font-mono text-xs uppercase tracking-[0.15em] text-ink/40">
-            Loading availability…
+            {t(locale, "loadingAvailability")}
           </p>
         )}
         <label className="mt-4 flex flex-wrap items-center gap-2 font-mono text-xs text-ink/40">
-          Times shown in
+          {t(locale, "timesShownIn")}
           <select
             value={tz}
             onChange={(e) => {
@@ -332,10 +338,10 @@ export default function BookingWidget({
                 setSelectedDay(null);
                 setSelectedSlot(null);
               }}
-              title={`Back to your timezone (${browserTz.replace(/_/g, " ")})`}
+              title={t(locale, "backToYourTz", { tz: browserTz.replace(/_/g, " ") })}
               className="rounded-full border border-ink/15 px-2.5 py-1 text-[11px] uppercase tracking-wide text-ink/60 hover:border-ink hover:text-ink"
             >
-              ↺ reset
+              ↺ {t(locale, "reset")}
             </button>
           )}
           {tz !== hostTimezone && (
@@ -346,11 +352,11 @@ export default function BookingWidget({
         </label>
         <div className="mt-6 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-ink/50">
           <span className="h-2 w-2 rounded-full" style={{ background: circadian(8) }} />
-          morning
+          {t(locale, "morning")}
           <span className="ml-3 h-2 w-2 rounded-full" style={{ background: circadian(12.5) }} />
-          midday
+          {t(locale, "midday")}
           <span className="ml-3 h-2 w-2 rounded-full" style={{ background: circadian(17) }} />
-          evening
+          {t(locale, "evening")}
         </div>
       </div>
 
@@ -358,7 +364,7 @@ export default function BookingWidget({
         {selectedDay && !selectedSlot && (
           <div>
             <h3 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-ink/60">
-              {new Date(selectedDay + "T12:00:00Z").toLocaleDateString(undefined, {
+              {new Date(selectedDay + "T12:00:00Z").toLocaleDateString(locale, {
                 weekday: "long",
                 month: "long",
                 day: "numeric",
@@ -377,7 +383,7 @@ export default function BookingWidget({
                     style={{ "--slot-i": i } as React.CSSProperties}
                     title={
                       differs
-                        ? `${timeLabel(iso, hostTimezone)} for ${hostName}`
+                        ? t(locale, "forHost", { time: timeLabel(iso, hostTimezone), host: hostName }).replace(/^= /, "")
                         : undefined
                     }
                     className="slot-cascade group flex w-full items-center gap-3 rounded-lg border border-ink/10 bg-white px-4 py-2.5 text-left font-mono text-sm tabular-nums text-ink transition hover:border-ink"
@@ -399,7 +405,7 @@ export default function BookingWidget({
             </div>
             {tz !== hostTimezone && (
               <p className="mt-2 font-mono text-[11px] text-ink/40">
-                Grey time = {hostName}&rsquo;s ({hostTimezone.replace(/_/g, " ")})
+                {t(locale, "greyTime", { host: hostName, zone: hostTimezone.replace(/_/g, " ") })}
               </p>
             )}
           </div>
@@ -413,7 +419,7 @@ export default function BookingWidget({
                 className="h-2.5 w-2.5 rounded-full"
                 style={{ background: slotColor(selectedSlot) }}
               />
-              {new Date(selectedSlot).toLocaleString(undefined, {
+              {new Date(selectedSlot).toLocaleString(locale, {
                 weekday: "short",
                 month: "short",
                 day: "numeric",
@@ -424,32 +430,32 @@ export default function BookingWidget({
             </h3>
             {tz !== hostTimezone && (
               <p className="font-mono text-xs text-ink/50">
-                = {timeLabel(selectedSlot, hostTimezone)} for {hostName}
+                {t(locale, "forHost", { time: timeLabel(selectedSlot, hostTimezone), host: hostName })}
               </p>
             )}
             <input
               name="name"
               required
-              placeholder="Your name"
+              placeholder={t(locale, "yourName")}
               className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
             />
             <input
               name="company"
               required
-              placeholder="Company"
+              placeholder={t(locale, "company")}
               className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
             />
             <input
               name="email"
               type="email"
               required
-              placeholder="Your email"
+              placeholder={t(locale, "yourEmail")}
               className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
             />
             <textarea
               name="notes"
               rows={3}
-              placeholder="Anything to share ahead of the meeting? (optional)"
+              placeholder={t(locale, "notesPlaceholder")}
               className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
             />
             {error && <p className="text-sm text-red-700">{error}</p>}
@@ -459,14 +465,14 @@ export default function BookingWidget({
                 disabled={submitting}
                 className="flex-1 rounded-lg bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:opacity-90 disabled:opacity-50"
               >
-                {submitting ? "Booking…" : "Confirm booking"}
+                {submitting ? t(locale, "bookingEllipsis") : t(locale, "confirmBooking")}
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedSlot(null)}
                 className="rounded-lg border border-ink/15 px-3 py-2.5 text-sm text-ink hover:border-ink"
               >
-                Back
+                {t(locale, "back")}
               </button>
             </div>
           </form>
@@ -474,7 +480,7 @@ export default function BookingWidget({
 
         {!selectedDay && (
           <p className="pt-10 text-sm text-ink/40">
-            Choose an outlined day to see its times.
+            {t(locale, "chooseDay")}
           </p>
         )}
       </div>
