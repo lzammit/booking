@@ -334,6 +334,21 @@ export async function cancelBookingAsHost(formData: FormData) {
   redirect("/dashboard");
 }
 
+export async function deletePastBooking(formData: FormData) {
+  const host = await requireHost();
+  const id = Number(formData.get("id"));
+  // Only history can be removed: cancelled bookings, or ones already over.
+  // Upcoming confirmed meetings must go through Cancel (which notifies the
+  // guest and cleans up meetings/invites) — never silent deletion.
+  db.prepare(
+    `DELETE FROM bookings
+     WHERE id = ? AND host_id = ?
+       AND (status = 'cancelled' OR end_utc <= ?)`
+  ).run(id, host.id, new Date().toISOString());
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}
+
 export async function disconnectWebex() {
   const host = await requireHost();
   webexDisconnect(host.id);

@@ -1,7 +1,8 @@
 import { DateTime } from "luxon";
 import db, { Booking, EventType } from "@/lib/db";
 import { requireHost } from "@/lib/session";
-import { cancelBookingAsHost, updateSlug } from "@/lib/actions";
+import { cancelBookingAsHost, deletePastBooking, updateSlug } from "@/lib/actions";
+import ConfirmSubmit from "./admin/ConfirmSubmit";
 
 export default async function DashboardPage({
   searchParams,
@@ -132,14 +133,31 @@ export default async function DashboardPage({
           <h2 className="font-semibold mb-3">Past & cancelled</h2>
           <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 opacity-70">
             {past.map((b) => (
-              <li key={b.id} className="p-4 text-sm">
-                <span className="font-medium">
-                  {b.event_name} — {b.guest_name}
-                </span>{" "}
-                <span className="text-gray-500">
-                  {fmt(b.start_utc)}
-                  {b.status === "cancelled" && " · cancelled"}
-                </span>
+              <li key={b.id} className="flex items-center gap-4 p-4 text-sm">
+                <div className="flex-1">
+                  <span className="font-medium">
+                    {b.event_name} — {b.guest_name}
+                  </span>{" "}
+                  <span className="text-gray-500">
+                    {fmt(b.start_utc)}
+                    {b.status === "cancelled" && " · cancelled"}
+                  </span>
+                </div>
+                {b.status === "confirmed" && (
+                  <a
+                    href={`/reschedule/${b.cancel_token}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Reschedule
+                  </a>
+                )}
+                <form action={deletePastBooking}>
+                  <input type="hidden" name="id" value={b.id} />
+                  <ConfirmSubmit
+                    label="Remove"
+                    confirmText={`Remove "${b.event_name} — ${b.guest_name}" from your history? This can't be undone.`}
+                  />
+                </form>
               </li>
             ))}
           </ul>
