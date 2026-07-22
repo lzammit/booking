@@ -65,7 +65,8 @@ function buildIcs(
     `ATTENDEE;CN=${icsEscape(attendee.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee.email}`,
     "TRANSP:OPAQUE",
     `STATUS:${method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
-    `SEQUENCE:${method === "CANCEL" ? 1 : 0}`,
+    // Same UID + higher SEQUENCE = calendar clients move the existing event.
+    `SEQUENCE:${method === "CANCEL" ? booking.sequence + 1 : booking.sequence}`,
     "END:VEVENT",
     "END:VCALENDAR",
   ];
@@ -125,7 +126,7 @@ export async function sendBookingEmails(
   booking: Booking,
   host: Host,
   eventType: EventType,
-  kind: "confirmed" | "cancelled"
+  kind: "confirmed" | "cancelled" | "rescheduled"
 ) {
   const t = transport();
   if (!t) {
@@ -157,7 +158,7 @@ export async function sendBookingEmails(
   const guestJoinLine = booking.webex_link
     ? `\n${tr(guestLocale, "mail_join", { link: booking.webex_link })}`
     : "";
-  const method = kind === "confirmed" ? "REQUEST" : "CANCEL";
+  const method = kind === "cancelled" ? "CANCEL" : "REQUEST";
   // The host's invite (and email subject) leads with who's coming:
   // "<Company> - <Guest name>". The guest's invite leads with the meeting.
   const hostSummary = booking.guest_company
@@ -188,11 +189,13 @@ export async function sendBookingEmails(
       subject:
         kind === "confirmed"
           ? tr(guestLocale, "mail_confirmedSubject", { what: subjectBase, when: startGuest })
-          : tr(guestLocale, "mail_cancelledSubject", { what: subjectBase }),
+          : kind === "rescheduled"
+            ? tr(guestLocale, "mail_rescheduledSubject", { what: subjectBase, when: startGuest })
+            : tr(guestLocale, "mail_cancelledSubject", { what: subjectBase }),
       text:
-        kind === "confirmed"
-          ? `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_confirmedBody")}\n\n${tr(guestLocale, "mail_what", { what: subjectBase, min: eventType.duration_min })}\n${tr(guestLocale, "mail_when", { when: startGuest })}${guestJoinLine}\n\n${tr(guestLocale, "mail_cancelLink", { url: cancelUrl })}\n`
-          : `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_cancelledBody")}\n\n${tr(guestLocale, "mail_whatPlain", { what: subjectBase })}\n${tr(guestLocale, "mail_when", { when: startGuest })}\n`,
+        kind === "cancelled"
+          ? `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_cancelledBody")}\n\n${tr(guestLocale, "mail_whatPlain", { what: subjectBase })}\n${tr(guestLocale, "mail_when", { when: startGuest })}\n`
+          : `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, kind === "rescheduled" ? "mail_rescheduledBody" : "mail_confirmedBody")}\n\n${tr(guestLocale, "mail_what", { what: subjectBase, min: eventType.duration_min })}\n${tr(guestLocale, "mail_when", { when: startGuest })}${guestJoinLine}\n\n${tr(guestLocale, "mail_cancelLink", { url: cancelUrl })}\n`,
       alternatives: icsFor(
         subjectBase,
         { name: host.name, email: host.email },
@@ -203,11 +206,18 @@ export async function sendBookingEmails(
     t.sendMail({
       from,
       to: host.email,
-      subject: kind === "confirmed" ? hostSummary : `Cancelled: ${hostSummary}`,
+      subject:
+        kind === "confirmed"
+          ? hostSummary
+          : kind === "rescheduled"
+            ? `Rescheduled: ${hostSummary} — ${startHost}`
+            : `Cancelled: ${hostSummary}`,
       text:
         kind === "confirmed"
           ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> booked "${eventType.name}".\n\nWhen: ${startHost}${joinLine}\nNotes: ${booking.notes || "(none)"}\n`
-          : `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> — booking "${eventType.name}" on ${startHost} was cancelled.\n`,
+          : kind === "rescheduled"
+            ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> moved "${eventType.name}".\n\nNew time: ${startHost}${joinLine}\n`
+            : `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> — booking "${eventType.name}" on ${startHost} was cancelled.\n`,
       alternatives: icsFor(hostSummary, system, { name: host.name, email: host.email }),
       headers: calendarHeaders,
     }),

@@ -111,6 +111,12 @@ export default async function DashboardPage({
                     {b.notes && <> · “{b.notes}”</>}
                   </div>
                 </div>
+                <a
+                  href={`/reschedule/${b.cancel_token}`}
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  Reschedule
+                </a>
                 <form action={cancelBookingAsHost}>
                   <input type="hidden" name="id" value={b.id} />
                   <button className="text-sm text-red-600 hover:underline">Cancel</button>

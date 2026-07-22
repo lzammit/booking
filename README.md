@@ -44,8 +44,10 @@ time slots colour-coded by time of day](docs/screenshots/event-page.png)
   - **connect a Webex account** so each booking schedules a *unique* Webex
     meeting via the API (needs a Webex OAuth integration, and a corporate org
     may require admin approval — the static field is the reliable fallback).
-- **Cancellation** — self-service guest cancel links; freed slots reopen
-  automatically.
+- **Cancellation & rescheduling** — self-service guest links to cancel or move
+  a booking to a new time; the calendar invite's SEQUENCE is bumped so
+  everyone's calendar event moves instead of going stale, connected
+  Webex/Outlook meetings are updated, and freed slots reopen automatically.
 - **Internationalized guest experience** — the booking pages, cancel page, and
   the guest's confirmation email follow the visitor's browser language
   (English and French today; adding a language is a dictionary entry in

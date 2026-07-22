@@ -101,6 +101,11 @@ function createDb() {
   if (!bookingCols2.some((c) => c.name === "guest_locale")) {
     db.exec("ALTER TABLE bookings ADD COLUMN guest_locale TEXT NOT NULL DEFAULT 'en'");
   }
+  if (!bookingCols2.some((c) => c.name === "sequence")) {
+    // iCalendar SEQUENCE: bumped on each reschedule so calendar clients
+    // update the existing event (same UID) instead of keeping the old time.
+    db.exec("ALTER TABLE bookings ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0");
+  }
   // Seed the signup code from the env once, so it becomes UI-manageable.
   if (
     process.env.SIGNUP_CODE &&
@@ -235,5 +240,6 @@ export interface Booking {
   ms_event_id: string | null;
   webex_link: string | null;
   webex_meeting_id: string | null;
+  sequence: number;
   created_at: string;
 }

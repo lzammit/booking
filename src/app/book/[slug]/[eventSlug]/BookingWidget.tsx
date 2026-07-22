@@ -19,6 +19,8 @@ interface Props {
   hostName: string;
   hostTimezone: string;
   locale: Locale;
+  /** When set, the widget moves an existing booking instead of creating one. */
+  rescheduleToken?: string;
 }
 
 const DAWN: [number, number, number] = [240, 152, 126]; // 06:00
@@ -67,6 +69,7 @@ export default function BookingWidget({
   hostName,
   hostTimezone,
   locale,
+  rescheduleToken,
 }: Props) {
   const browserTz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -97,7 +100,7 @@ export default function BookingWidget({
     const to = ymd(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
     try {
       const res = await fetch(
-        `/api/slots?eventTypeId=${eventTypeId}&from=${from}&to=${to}`
+        `/api/slots?eventTypeId=${eventTypeId}&from=${from}&to=${to}${rescheduleToken ? `&exclude=${encodeURIComponent(rescheduleToken)}` : ""}`
       );
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as { slots: string[] };
@@ -106,7 +109,7 @@ export default function BookingWidget({
       setError(t(locale, "errLoad"));
       setSlots([]);
     }
-  }, [eventTypeId, monthStart]);
+  }, [eventTypeId, monthStart, rescheduleToken]);
 
   useEffect(() => {
     loadMonth();
@@ -174,19 +177,23 @@ export default function BookingWidget({
     setError(null);
     const fd = new FormData(e.currentTarget);
     try {
-      const res = await fetch("/api/book", {
+      const res = await fetch(rescheduleToken ? "/api/reschedule" : "/api/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventTypeId,
-          start: selectedSlot,
-          name: fd.get("name"),
-          company: fd.get("company"),
-          email: fd.get("email"),
-          notes: fd.get("notes") || "",
-          timezone: tz,
-          locale,
-        }),
+        body: JSON.stringify(
+          rescheduleToken
+            ? { token: rescheduleToken, start: selectedSlot, timezone: tz, locale }
+            : {
+                eventTypeId,
+                start: selectedSlot,
+                name: fd.get("name"),
+                company: fd.get("company"),
+                email: fd.get("email"),
+                notes: fd.get("notes") || "",
+                timezone: tz,
+                locale,
+              }
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -208,7 +215,7 @@ export default function BookingWidget({
     return (
       <div className="max-w-md rounded-2xl border border-ink/10 bg-white p-8">
         <div className="day-arc w-full" />
-        <h2 className="mt-6 text-2xl font-semibold text-ink">{t(locale, "booked")}</h2>
+        <h2 className="mt-6 text-2xl font-semibold text-ink">{t(locale, rescheduleToken ? "rescheduledTitle" : "booked")}</h2>
         <p className="mt-3 flex items-center gap-2 font-mono text-sm text-ink">
           <span
             aria-hidden
@@ -433,31 +440,35 @@ export default function BookingWidget({
                 {t(locale, "forHost", { time: timeLabel(selectedSlot, hostTimezone), host: hostName })}
               </p>
             )}
-            <input
-              name="name"
-              required
-              placeholder={t(locale, "yourName")}
-              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
-            />
-            <input
-              name="company"
-              required
-              placeholder={t(locale, "company")}
-              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
-            />
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder={t(locale, "yourEmail")}
-              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
-            />
-            <textarea
-              name="notes"
-              rows={3}
-              placeholder={t(locale, "notesPlaceholder")}
-              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
-            />
+            {!rescheduleToken && (
+              <>
+                <input
+                  name="name"
+                  required
+                  placeholder={t(locale, "yourName")}
+                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
+                />
+                <input
+                  name="company"
+                  required
+                  placeholder={t(locale, "company")}
+                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
+                />
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  placeholder={t(locale, "yourEmail")}
+                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
+                />
+                <textarea
+                  name="notes"
+                  rows={3}
+                  placeholder={t(locale, "notesPlaceholder")}
+                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
+                />
+              </>
+            )}
             {error && <p className="text-sm text-red-700">{error}</p>}
             <div className="flex gap-2">
               <button
@@ -465,7 +476,7 @@ export default function BookingWidget({
                 disabled={submitting}
                 className="flex-1 rounded-lg bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:opacity-90 disabled:opacity-50"
               >
-                {submitting ? t(locale, "bookingEllipsis") : t(locale, "confirmBooking")}
+                {submitting ? t(locale, "bookingEllipsis") : t(locale, rescheduleToken ? "confirmNewTime" : "confirmBooking")}
               </button>
               <button
                 type="button"

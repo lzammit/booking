@@ -237,6 +237,35 @@ export async function createOutlookEvent(args: {
   }
 }
 
+/** Move an existing Outlook event to new times (best effort). */
+export async function updateOutlookEvent(
+  hostId: number,
+  eventId: string,
+  startUtc: string,
+  endUtc: string
+) {
+  const token = await getAccessToken(hostId);
+  if (!token) return;
+  try {
+    const res = await fetch(`https://graph.microsoft.com/v1.0/me/events/${eventId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        start: { dateTime: startUtc, timeZone: "UTC" },
+        end: { dateTime: endUtc, timeZone: "UTC" },
+      }),
+    });
+    if (!res.ok) {
+      console.error(`MS update event ${res.status}: ${await res.text()}`);
+    }
+  } catch (err) {
+    console.error("MS updateOutlookEvent failed:", err);
+  }
+}
+
 /** Delete the Outlook event on cancellation (best effort). */
 export async function deleteOutlookEvent(hostId: number, eventId: string) {
   const token = await getAccessToken(hostId);

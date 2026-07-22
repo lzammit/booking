@@ -56,13 +56,19 @@ const en = {
   booked: "You’re booked.",
   bookedLine:
     "{min} minutes with {host}, shown in {tz}. A confirmation email with a calendar invite is on its way.",
-  // Cancel page
+  // Cancel / manage page
   cancelTitle: "Cancel this booking?",
   cancelledTitle: "Booking cancelled",
   withHost: "{event} with {host}",
   cancelButton: "Cancel this booking",
   cancelledInfo:
     "This time is freed up. If you need a new one, book again from the original link.",
+  rescheduleInstead: "Or pick a new time instead →",
+  // Reschedule page
+  rescheduleTitle: "Choose a new time",
+  currentlyScheduled: "Currently: {when}",
+  confirmNewTime: "Confirm new time",
+  rescheduledTitle: "Rescheduled.",
   // 404
   nf_eyebrow: "404 · unscheduled",
   nf_title: "This time doesn’t exist",
@@ -91,14 +97,16 @@ const en = {
   // Guest emails
   mail_confirmedSubject: "Confirmed: {what} — {when}",
   mail_cancelledSubject: "Cancelled: {what}",
+  mail_rescheduledSubject: "Updated: {what} — now {when}",
   mail_hi: "Hi {name},",
   mail_confirmedBody: "Your booking is confirmed.",
   mail_cancelledBody: "This booking has been cancelled.",
+  mail_rescheduledBody: "Your booking has been moved to a new time.",
   mail_what: "What: {what} ({min} min)",
   mail_whatPlain: "What: {what}",
   mail_when: "When: {when}",
   mail_join: "Join Webex: {link}",
-  mail_cancelLink: "Need to cancel? {url}",
+  mail_cancelLink: "Need to reschedule or cancel? {url}",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -143,6 +151,11 @@ const fr: Record<MessageKey, string> = {
   cancelButton: "Annuler cette réservation",
   cancelledInfo:
     "Ce créneau est libéré. S’il vous faut une nouvelle heure, repassez par le lien d’origine.",
+  rescheduleInstead: "Ou choisissez plutôt une nouvelle heure →",
+  rescheduleTitle: "Choisissez une nouvelle heure",
+  currentlyScheduled: "Actuellement : {when}",
+  confirmNewTime: "Confirmer la nouvelle heure",
+  rescheduledTitle: "C’est déplacé.",
   nf_eyebrow: "404 · non planifié",
   nf_title: "Cette heure n’existe pas",
   nf_text:
@@ -167,14 +180,16 @@ const fr: Record<MessageKey, string> = {
   tzHint: "Fuseau horaire : {tz} (modifiable plus tard)",
   mail_confirmedSubject: "Confirmé : {what} — {when}",
   mail_cancelledSubject: "Annulé : {what}",
+  mail_rescheduledSubject: "Modifié : {what} — désormais {when}",
   mail_hi: "Bonjour {name},",
   mail_confirmedBody: "Votre réservation est confirmée.",
   mail_cancelledBody: "Cette réservation a été annulée.",
+  mail_rescheduledBody: "Votre réservation a été déplacée à une nouvelle heure.",
   mail_what: "Quoi : {what} ({min} min)",
   mail_whatPlain: "Quoi : {what}",
   mail_when: "Quand : {when}",
   mail_join: "Rejoindre Webex : {link}",
-  mail_cancelLink: "Besoin d’annuler ? {url}",
+  mail_cancelLink: "Besoin de déplacer ou d’annuler ? {url}",
 };
 
 const dictionaries: Record<Locale, Record<MessageKey, string>> = { en, fr };

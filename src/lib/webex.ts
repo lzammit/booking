@@ -189,6 +189,38 @@ export async function createWebexMeeting(args: {
   }
 }
 
+/** Move an existing Webex meeting to new times (best effort). */
+export async function updateWebexMeeting(args: {
+  hostId: number;
+  meetingId: string;
+  title: string;
+  startUtc: string;
+  endUtc: string;
+}) {
+  const token = await getAccessToken(args.hostId);
+  if (!token) return;
+  try {
+    const res = await fetch(`${API}/meetings/${args.meetingId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: args.title,
+        start: args.startUtc,
+        end: args.endUtc,
+        timezone: "UTC",
+      }),
+    });
+    if (!res.ok) {
+      console.error(`Webex update meeting ${res.status}: ${await res.text()}`);
+    }
+  } catch (err) {
+    console.error("Webex updateWebexMeeting failed:", err);
+  }
+}
+
 /** Delete a Webex meeting on cancellation (best effort). */
 export async function deleteWebexMeeting(hostId: number, meetingId: string) {
   const token = await getAccessToken(hostId);

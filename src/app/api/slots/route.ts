@@ -19,6 +19,18 @@ export async function GET(req: NextRequest) {
   const host = db
     .prepare("SELECT * FROM hosts WHERE id = ?")
     .get(eventType.host_id) as Host;
-  const slots = await computeSlots(host, eventType, from, to);
+  // Rescheduling: exclude the booking being moved (authorized by its secret
+  // cancel token) so it doesn't block its own new time.
+  let excludeBookingId: number | undefined;
+  const exclude = sp.get("exclude");
+  if (exclude) {
+    const own = db
+      .prepare(
+        "SELECT id FROM bookings WHERE cancel_token = ? AND host_id = ? AND status = 'confirmed'"
+      )
+      .get(exclude, host.id) as { id: number } | undefined;
+    excludeBookingId = own?.id;
+  }
+  const slots = await computeSlots(host, eventType, from, to, { excludeBookingId });
   return NextResponse.json({ slots });
 }

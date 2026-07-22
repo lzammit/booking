@@ -11,7 +11,8 @@ export async function computeSlots(
   host: Host,
   eventType: EventType,
   fromDate: string, // yyyy-MM-dd
-  toDate: string
+  toDate: string,
+  opts: { excludeBookingId?: number } = {}
 ): Promise<string[]> {
   const zone = host.timezone;
   const now = DateTime.utc();
@@ -36,11 +37,14 @@ export async function computeSlots(
   }
 
   // Busy intervals: confirmed bookings (any event type of this host) + M365 calendar.
-  const bookings = db
-    .prepare(
-      "SELECT * FROM bookings WHERE host_id = ? AND status = 'confirmed' AND end_utc > ? AND start_utc < ?"
-    )
-    .all(host.id, from.toUTC().toISO(), to.toUTC().toISO()) as Booking[];
+  // A booking being rescheduled is excluded so it doesn't block its own move.
+  const bookings = (
+    db
+      .prepare(
+        "SELECT * FROM bookings WHERE host_id = ? AND status = 'confirmed' AND end_utc > ? AND start_utc < ?"
+      )
+      .all(host.id, from.toUTC().toISO(), to.toUTC().toISO()) as Booking[]
+  ).filter((b) => b.id !== opts.excludeBookingId);
   const busy: Interval[] = bookings.map((b) =>
     Interval.fromDateTimes(
       DateTime.fromISO(b.start_utc),
@@ -102,13 +106,14 @@ export async function computeSlots(
 export async function isSlotFree(
   host: Host,
   eventType: EventType,
-  startUtcISO: string
+  startUtcISO: string,
+  opts: { excludeBookingId?: number } = {}
 ): Promise<boolean> {
   const start = DateTime.fromISO(startUtcISO, { zone: "utc" });
   if (!start.isValid) return false;
   const day = start.setZone(host.timezone).toISODate();
   if (!day) return false;
-  const slots = await computeSlots(host, eventType, day, day);
+  const slots = await computeSlots(host, eventType, day, day, opts);
   const normalized = start.toISO();
   return slots.some((s) => s === normalized);
 }
