@@ -66,7 +66,12 @@ export async function refreshIcsFeed(hostId: number, url: string): Promise<numbe
 
   const windowStart = DateTime.utc().minus({ days: 1 });
   const windowEnd = DateTime.utc().plus({ days: 62 });
-  const intervals = parseIcsBusy(text, windowStart, windowEnd);
+  // All-day events carry no timezone — interpret their day boundaries in the
+  // host's timezone so e.g. a day off blocks that host's actual day.
+  const hostRow = db.prepare("SELECT timezone FROM hosts WHERE id = ?").get(hostId) as
+    | { timezone: string }
+    | undefined;
+  const intervals = parseIcsBusy(text, windowStart, windowEnd, hostRow?.timezone ?? "utc");
 
   const tx = db.transaction(() => {
     for (const source of [SOURCE, ...LEGACY_SOURCES]) {

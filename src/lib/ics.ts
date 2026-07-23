@@ -90,7 +90,8 @@ function parseIcsDate(prop: Prop): {
 } {
   const v = prop.value;
   if (prop.params["VALUE"] === "DATE" || (!v.includes("T") && v.length === 8)) {
-    return { dt: null, dateOnly: true, zone: "utc" };
+    const dt = DateTime.fromFormat(v, "yyyyMMdd", { zone: "utc" });
+    return { dt: dt.isValid ? dt : null, dateOnly: true, zone: "utc" };
   }
   if (v.endsWith("Z")) {
     const dt = DateTime.fromFormat(v.slice(0, -1), "yyyyMMdd'T'HHmmss", { zone: "utc" });
@@ -128,7 +129,8 @@ function parseDuration(value: string): number | null {
 export function parseIcsBusy(
   ics: string,
   windowStart: DateTime,
-  windowEnd: DateTime
+  windowEnd: DateTime,
+  allDayZone: string = "utc"
 ): { start: string; end: string }[] {
   const unfolded = ics.replace(/\r?\n[ \t]/g, "");
 
@@ -180,7 +182,7 @@ export function parseIcsBusy(
     const exclusions = record.recurrenceId
       ? [] // an override IS the occurrence — nothing to exclude from it
       : [...record.exdates, ...(overridden.get(record.uid) ?? [])];
-    expand(record.props, exclusions, windowStart, windowEnd, out);
+    expand(record.props, exclusions, windowStart, windowEnd, out, allDayZone);
   }
   return out;
 }
@@ -190,18 +192,29 @@ function expand(
   exclusions: DateTime[],
   windowStart: DateTime,
   windowEnd: DateTime,
-  out: { start: string; end: string }[]
+  out: { start: string; end: string }[],
+  allDayZone: string = "utc"
 ) {
   if (props["TRANSP"]?.value.toUpperCase() === "TRANSPARENT") return;
   if (props["STATUS"]?.value.toUpperCase() === "CANCELLED") return;
   const dtstart = props["DTSTART"];
   if (!dtstart) return;
-  const { dt: seriesStart, dateOnly, zone } = parseIcsDate(dtstart);
-  if (!seriesStart || dateOnly) return; // all-day events skipped
+  let { dt: seriesStart, dateOnly, zone } = parseIcsDate(dtstart);
+  if (!seriesStart) return;
 
   let durationSec = 1800;
   const dtend = props["DTEND"] ? parseIcsDate(props["DTEND"]).dt : null;
-  if (dtend) {
+  if (dateOnly) {
+    // All-day busy event (opaque — "Show As: Free" was filtered above):
+    // block the full day(s), interpreted in the host's timezone.
+    const days = dtend ? Math.max(1, dtend.diff(seriesStart, "days").days) : 1;
+    seriesStart = DateTime.fromObject(
+      { year: seriesStart.year, month: seriesStart.month, day: seriesStart.day },
+      { zone: allDayZone }
+    );
+    zone = allDayZone;
+    durationSec = days * 86400;
+  } else if (dtend) {
     durationSec = Math.max(60, dtend.diff(seriesStart, "seconds").seconds);
   } else if (props["DURATION"]) {
     durationSec = Math.max(60, parseDuration(props["DURATION"].value) ?? 1800);

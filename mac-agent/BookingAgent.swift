@@ -208,7 +208,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         var intervals: [[String: String]] = []
         for event in events {
-            if event.isAllDay { continue }
+            // All-day items default to "Free" (birthdays, subscribed holiday
+            // calendars) — but ones explicitly marked Busy or Out of Office
+            // (e.g. a wellness day) must block the whole day.
+            if event.isAllDay,
+               event.availability != .busy && event.availability != .unavailable {
+                continue
+            }
             if event.availability == .free { continue }
             if event.status == .canceled { continue }
             if let me = event.attendees?.first(where: { $0.isCurrentUser }),
@@ -548,7 +554,12 @@ enum ICSParser {
         let value = prop.value
         var zone = TimeZone(identifier: "UTC")!
         if prop.params["VALUE"] == "DATE" || (!value.contains("T") && value.count == 8) {
-            return (nil, true, zone)
+            // All-day: midnight in the Mac's local zone (the host's day).
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone.current
+            formatter.dateFormat = "yyyyMMdd"
+            return (formatter.date(from: value), true, TimeZone.current)
         }
         var text = value
         if text.hasSuffix("Z") {
@@ -592,10 +603,18 @@ enum ICSParser {
         if props["STATUS"]?.value.uppercased() == "CANCELLED" { return [] }
         guard let dtstart = props["DTSTART"] else { return [] }
         let (startOpt, isDateOnly, zone) = parseDate(dtstart)
-        guard let seriesStart = startOpt, !isDateOnly else { return [] }  // all-day skipped
+        guard let seriesStart = startOpt else { return [] }
 
         var duration: TimeInterval = 1800
-        if let dtend = props["DTEND"], let end = parseDate(dtend).date {
+        if isDateOnly {
+            // All-day busy event ("Show As: Free" is TRANSPARENT and was
+            // filtered above): block the full day(s).
+            if let dtend = props["DTEND"], let end = parseDate(dtend).date {
+                duration = max(86400, end.timeIntervalSince(seriesStart))
+            } else {
+                duration = 86400
+            }
+        } else if let dtend = props["DTEND"], let end = parseDate(dtend).date {
             duration = max(60, end.timeIntervalSince(seriesStart))
         } else if let dur = props["DURATION"].flatMap({ parseDuration($0.value) }) {
             duration = max(60, dur)
