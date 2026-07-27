@@ -29,13 +29,21 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 </plist>
 EOF
 
-# Prefer a stable signing identity: TCC ties the calendar permission to the
-# signature, and ad-hoc signatures change every build.
-IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/ {print $2; exit}')
-if [ -n "$IDENTITY" ]; then
-  codesign --force --deep -s "$IDENTITY" "$APP"
-  echo "Signed with: $IDENTITY"
+# Signing identity. TCC ties the calendar permission to the signature, and
+# ad-hoc signatures change every build. Prefer "Developer ID Application"
+# (required for notarized distribution); fall back to Apple Development (local
+# use), then ad-hoc. Developer ID builds add the hardened runtime + a secure
+# timestamp so the app can be notarized.
+DEVID=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/ {print $2; exit}')
+APPLEDEV=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/ {print $2; exit}')
+if [ -n "$DEVID" ]; then
+  codesign --force --options runtime --timestamp -s "$DEVID" "$APP"
+  echo "Signed with: $DEVID (hardened runtime, timestamped)"
+elif [ -n "$APPLEDEV" ]; then
+  codesign --force -s "$APPLEDEV" "$APP"
+  echo "Signed with: $APPLEDEV"
 else
-  codesign --force --deep -s - "$APP"
+  codesign --force -s - "$APP"
+  echo "Signed ad-hoc"
 fi
 echo "Built $PWD/$APP"
