@@ -45,3 +45,4 @@ data/
 .env
 mac-agent/BookingAgent.app/
 mac-agent/BookingAgent.app.zip
+mac-agent/BookingAgent.dmg
