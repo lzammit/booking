@@ -20,6 +20,9 @@ struct Config: Codable {
     /// live only in the Outlook app (no macOS Internet Accounts): OWA →
     /// Settings → Calendar → Shared calendars → Publish a calendar.
     var icsUrl: String?
+    /// EKCalendar identifier bookings are written to. nil = default calendar.
+    /// Point this at a dedicated (coloured) calendar to make bookings pop.
+    var calendarId: String?
 
     static let dir = ("~/Library/Application Support/BookingAgent" as NSString)
         .expandingTildeInPath
@@ -130,25 +133,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
 
-        let urlField = NSTextField(frame: NSRect(x: 0, y: 90, width: 340, height: 24))
+        let urlField = NSTextField(frame: NSRect(x: 0, y: 124, width: 340, height: 24))
         urlField.placeholderString = "Server URL"
         urlField.stringValue = existing?.appUrl ?? "https://booking.packetfence.net"
-        let tokenField = NSTextField(frame: NSRect(x: 0, y: 58, width: 340, height: 24))
+        let tokenField = NSTextField(frame: NSRect(x: 0, y: 92, width: 340, height: 24))
         tokenField.placeholderString = "API token"
         tokenField.stringValue = existing?.token ?? ""
-        let icsField = NSTextField(frame: NSRect(x: 0, y: 26, width: 340, height: 24))
+        let icsField = NSTextField(frame: NSRect(x: 0, y: 60, width: 340, height: 24))
         icsField.placeholderString = "Calendar ICS feed URL (optional)"
         icsField.stringValue = existing?.icsUrl ?? ""
+
+        // Calendar to write bookings into. Populated only once Calendar access
+        // is granted (writable calendars); first tag holds each one's id.
+        let calPopup = NSPopUpButton(frame: NSRect(x: 0, y: 28, width: 340, height: 24))
+        let writable = store.calendars(for: .event).filter { $0.allowsContentModifications }
+        if writable.isEmpty {
+            calPopup.addItem(withTitle: "Default calendar")
+            calPopup.item(at: 0)?.tag = -1
+            calPopup.isEnabled = false
+        } else {
+            calPopup.addItem(withTitle: "Default calendar")
+            calPopup.item(at: 0)?.representedObject = nil
+            for cal in writable {
+                let src = cal.source?.title ?? ""
+                calPopup.addItem(withTitle: src.isEmpty ? cal.title : "\(cal.title) — \(src)")
+                calPopup.lastItem?.representedObject = cal.calendarIdentifier
+                if cal.calendarIdentifier == existing?.calendarId {
+                    calPopup.select(calPopup.lastItem)
+                }
+            }
+        }
+
         let hint = NSTextField(
-            labelWithString: "Token: dashboard → “Local calendar agent”. ICS: Google Calendar secret address, published Outlook, or iCloud link.")
-        hint.frame = NSRect(x: 0, y: 0, width: 340, height: 18)
+            labelWithString: "Bookings are added to the chosen calendar (pick a coloured one to spot them). Token: dashboard → “Local calendar agent”.")
+        hint.frame = NSRect(x: 0, y: 0, width: 340, height: 26)
         hint.font = .systemFont(ofSize: 10)
         hint.textColor = .secondaryLabelColor
+        hint.maximumNumberOfLines = 2
+        hint.lineBreakMode = .byWordWrapping
 
-        let box = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 118))
+        let box = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 152))
         box.addSubview(urlField)
         box.addSubview(tokenField)
         box.addSubview(icsField)
+        box.addSubview(calPopup)
         box.addSubview(hint)
         alert.accessoryView = box
         alert.window.initialFirstResponder = tokenField
@@ -158,10 +186,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         while url.hasSuffix("/") { url.removeLast() }
         let token = tokenField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let ics = icsField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        // -1 tag = the disabled placeholder (no access yet); keep prior choice.
+        let calId =
+            calPopup.selectedItem?.tag == -1
+            ? existing?.calendarId
+            : (calPopup.selectedItem?.representedObject as? String)
         guard !url.isEmpty, !token.isEmpty else { return }
         Config(
             appUrl: url, token: token, days: Config.load()?.days ?? 60,
-            icsUrl: ics.isEmpty ? nil : ics
+            icsUrl: ics.isEmpty ? nil : ics, calendarId: calId
         ).save()
         sync()
     }
@@ -357,7 +390,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// event-identifier map (EventMap), so their notes stay clean — no
     /// visible markers. Returns the number of bookings on the calendar.
     private func reconcile(bookings: [AgentBooking], config: Config) -> Int {
-        guard let calendar = store.defaultCalendarForNewEvents
+        // Prefer the host's chosen calendar; fall back to the default if it
+        // was deleted or is read-only.
+        let chosen = config.calendarId.flatMap { store.calendar(withIdentifier: $0) }
+        guard let calendar = (chosen?.allowsContentModifications == true ? chosen : nil)
+            ?? store.defaultCalendarForNewEvents
             ?? store.calendars(for: .event).first(where: { $0.allowsContentModifications })
         else { return 0 }
 
@@ -408,12 +445,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             if let event = existing {
                 if event.title != booking.summary || event.startDate != start
-                    || event.endDate != end || event.notes != notes || event.location != location {
+                    || event.endDate != end || event.notes != notes || event.location != location
+                    || event.calendar.calendarIdentifier != calendar.calendarIdentifier {
                     event.title = booking.summary
                     event.startDate = start
                     event.endDate = end
                     event.notes = notes
                     event.location = location
+                    event.calendar = calendar // migrate if the target changed
                     if let location, let url = URL(string: location) { event.url = url }
                     try? store.save(event, span: .thisEvent, commit: true)
                 }

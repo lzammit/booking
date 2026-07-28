@@ -19,7 +19,7 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
     <key>CFBundleName</key><string>BookingAgent</string>
     <key>CFBundleExecutable</key><string>booking-agent</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
+    <key>CFBundleShortVersionString</key><string>1.1</string>
     <key>LSUIElement</key><true/>
     <key>NSCalendarsUsageDescription</key>
     <string>Reads your calendar busy times to block them on your booking page, and adds new bookings to your calendar.</string>
