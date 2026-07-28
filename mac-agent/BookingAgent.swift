@@ -119,6 +119,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func syncNow() { sync() }
 
+    @objc private func openCalendarPrivacy() {
+        if let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")
+        {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     @objc private func openSettings() {
         promptForSettings(message: "Server URL and API token (dashboard → Local calendar agent).")
     }
@@ -178,20 +186,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let hint = NSTextField(
-            labelWithString: "Bookings are added to the chosen calendar (pick a coloured one to spot them). Token: dashboard → “Local calendar agent”.")
-        hint.frame = NSRect(x: 0, y: 0, width: 340, height: 26)
+        // If Calendar access was denied, the dropdown can't populate — guide
+        // the user to System Settings instead of leaving a dead control.
+        let status = EKEventStore.authorizationStatus(for: .event)
+        let denied = status == .denied || status == .restricted
+        let hintText = denied
+            ? "Calendar access is off, so bookings can’t sync. Turn it on for BookingAgent in System Settings, then reopen this window."
+            : "Bookings are added to the chosen calendar (pick a coloured one to spot them). Token: dashboard → “Local calendar agent”."
+        let hint = NSTextField(labelWithString: hintText)
+        hint.frame = NSRect(x: 0, y: 0, width: 340, height: 30)
         hint.font = .systemFont(ofSize: 10)
-        hint.textColor = .secondaryLabelColor
-        hint.maximumNumberOfLines = 2
+        hint.textColor = denied ? .systemRed : .secondaryLabelColor
+        hint.maximumNumberOfLines = 3
         hint.lineBreakMode = .byWordWrapping
 
-        let box = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 152))
+        let box = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: denied ? 178 : 152))
         box.addSubview(urlField)
         box.addSubview(tokenField)
         box.addSubview(icsField)
         box.addSubview(calPopup)
         box.addSubview(hint)
+        if denied {
+            let openBtn = NSButton(frame: NSRect(x: 0, y: 152, width: 260, height: 22))
+            openBtn.title = "Open Calendar settings…"
+            openBtn.bezelStyle = .rounded
+            openBtn.controlSize = .small
+            openBtn.target = self
+            openBtn.action = #selector(openCalendarPrivacy)
+            box.addSubview(openBtn)
+        }
         alert.accessoryView = box
         alert.window.initialFirstResponder = tokenField
 
@@ -225,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let handler: (Bool) -> Void = { [weak self] granted in
             guard let self else { return }
             guard granted else {
-                self.setStatus("Calendar access denied")
+                self.setStatus("Calendar access denied — see Settings…")
                 return
             }
             self.pushBusyBlocks(config: config)
