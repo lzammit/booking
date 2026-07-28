@@ -135,7 +135,9 @@ export default async function DashboardPage({
             {past.map((b) => (
               <li key={b.id} className="flex items-center gap-4 p-4 text-sm">
                 <div className="flex-1">
-                  <span className="font-medium">
+                  <span
+                    className={`font-medium ${b.status === "cancelled" ? "line-through text-gray-400" : ""}`}
+                  >
                     {b.event_name} — {b.guest_name}
                   </span>{" "}
                   <span className="text-gray-500">
