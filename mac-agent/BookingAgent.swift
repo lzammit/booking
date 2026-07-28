@@ -81,6 +81,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(statusLine)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(withTitle: "Sync now", action: #selector(syncNow), keyEquivalent: "s")
+        menu.addItem(
+            withTitle: "Allow Calendar access…",
+            action: #selector(requestCalendarAccess), keyEquivalent: "")
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         menu.addItem(NSMenuItem.separator())
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -124,6 +127,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")
         {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// Trigger the macOS Calendar permission prompt on demand. macOS only
+    /// shows the prompt while the decision is pending; once denied it must be
+    /// changed in System Settings, so route there instead.
+    @objc private func requestCalendarAccess() {
+        let status = EKEventStore.authorizationStatus(for: .event)
+        if status == .denied || status == .restricted {
+            openCalendarPrivacy()
+            return
+        }
+        if status != .notDetermined {
+            setStatus("Calendar access granted")
+            sync()
+            return
+        }
+        let handler: (Bool) -> Void = { [weak self] granted in
+            DispatchQueue.main.async {
+                if granted { self?.sync() } else { self?.openCalendarPrivacy() }
+            }
+        }
+        if #available(macOS 14.0, *) {
+            store.requestFullAccessToEvents { ok, _ in handler(ok) }
+        } else {
+            store.requestAccess(to: .event) { ok, _ in handler(ok) }
         }
     }
 
@@ -200,20 +229,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hint.maximumNumberOfLines = 3
         hint.lineBreakMode = .byWordWrapping
 
-        let box = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: denied ? 178 : 152))
+        // Show an access button whenever the calendar list is empty (access
+        // not yet granted). Undecided → the button pops the system prompt;
+        // denied → it opens System Settings (macOS won't re-prompt).
+        let needsAccess = writable.isEmpty
+        let box = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: needsAccess ? 182 : 152))
         box.addSubview(urlField)
         box.addSubview(tokenField)
         box.addSubview(icsField)
         box.addSubview(calPopup)
         box.addSubview(hint)
-        if denied {
-            let openBtn = NSButton(frame: NSRect(x: 0, y: 152, width: 260, height: 22))
-            openBtn.title = "Open Calendar settings…"
-            openBtn.bezelStyle = .rounded
-            openBtn.controlSize = .small
-            openBtn.target = self
-            openBtn.action = #selector(openCalendarPrivacy)
-            box.addSubview(openBtn)
+        if needsAccess {
+            let accessBtn = NSButton(frame: NSRect(x: 0, y: 152, width: 260, height: 24))
+            accessBtn.title = denied ? "Open Calendar settings…" : "Allow Calendar access…"
+            accessBtn.bezelStyle = .rounded
+            accessBtn.controlSize = .regular
+            accessBtn.keyEquivalent = denied ? "" : "\r"
+            accessBtn.target = self
+            accessBtn.action = #selector(requestCalendarAccess)
+            box.addSubview(accessBtn)
         }
         alert.accessoryView = box
         alert.window.initialFirstResponder = tokenField
