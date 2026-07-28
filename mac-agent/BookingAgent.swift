@@ -124,6 +124,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func promptForSettings(message: String) {
+        // EventKit only returns the calendar list once access is granted in
+        // this run, so request it first, then present the dialog on the main
+        // thread. (Harmless if already granted.)
+        let present: () -> Void = {
+            DispatchQueue.main.async { [weak self] in self?.showSettingsDialog(message: message) }
+        }
+        if #available(macOS 14.0, *) {
+            store.requestFullAccessToEvents { _, _ in present() }
+        } else {
+            store.requestAccess(to: .event) { _, _ in present() }
+        }
+    }
+
+    private func showSettingsDialog(message: String) {
         NSApp.activate(ignoringOtherApps: true)
         let existing = Config.load()
 
