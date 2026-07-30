@@ -23,12 +23,27 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
     <key>CFBundleExecutable</key><string>booking-agent</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.1</string>
+    <key>CFBundleShortVersionString</key><string>1.2</string>
     <key>LSUIElement</key><true/>
     <key>NSCalendarsUsageDescription</key>
     <string>Reads your calendar busy times to block them on your booking page, and adds new bookings to your calendar.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>Reads your calendar busy times to block them on your booking page, and adds new bookings to your calendar.</string>
+</dict>
+</plist>
+EOF
+
+# Entitlements: under the hardened runtime, Calendar (EventKit) access is
+# DENIED SILENTLY — no permission prompt, app absent from the Privacy pane —
+# unless the app carries the calendars entitlement. (This bit us in v1.1:
+# notarization enabled the hardened runtime without it, and the agent went
+# permanently "access denied".)
+cat > entitlements.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.personal-information.calendars</key><true/>
 </dict>
 </plist>
 EOF
@@ -41,13 +56,13 @@ EOF
 DEVID=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/ {print $2; exit}')
 APPLEDEV=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/ {print $2; exit}')
 if [ -n "$DEVID" ]; then
-  codesign --force --options runtime --timestamp -s "$DEVID" "$APP"
-  echo "Signed with: $DEVID (hardened runtime, timestamped)"
+  codesign --force --options runtime --timestamp --entitlements entitlements.plist -s "$DEVID" "$APP"
+  echo "Signed with: $DEVID (hardened runtime, timestamped, calendar entitlement)"
 elif [ -n "$APPLEDEV" ]; then
-  codesign --force -s "$APPLEDEV" "$APP"
+  codesign --force --entitlements entitlements.plist -s "$APPLEDEV" "$APP"
   echo "Signed with: $APPLEDEV"
 else
-  codesign --force -s - "$APP"
+  codesign --force --entitlements entitlements.plist -s - "$APP"
   echo "Signed ad-hoc"
 fi
 echo "Built $PWD/$APP"
