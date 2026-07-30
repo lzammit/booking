@@ -82,7 +82,8 @@ export default async function DashboardPage({
           </button>
         </form>
         <p className="text-xs text-gray-400 mt-2">
-          Changing it breaks previously shared links — pick something and stick with it.
+          You can rename this anytime — links you already shared keep working
+          and redirect to the new one.
         </p>
       </section>
 

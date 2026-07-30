@@ -313,13 +313,24 @@ export async function updateSlug(formData: FormData) {
         encodeURIComponent("Link must be 2-40 chars: letters, numbers, dashes")
     );
   }
+  if (slug === host.slug) redirect("/dashboard?saved=1");
   const taken = db
     .prepare("SELECT 1 FROM hosts WHERE slug = ? AND id != ?")
     .get(slug, host.id);
   if (taken) {
     redirect("/dashboard?error=" + encodeURIComponent(`"${slug}" is already taken`));
   }
-  db.prepare("UPDATE hosts SET slug = ? WHERE id = ?").run(slug, host.id);
+  const oldSlug = host.slug;
+  const tx = db.transaction(() => {
+    // The new slug becomes a real slug, so drop any parked alias by that name.
+    db.prepare("DELETE FROM slug_aliases WHERE slug = ?").run(slug);
+    db.prepare("UPDATE hosts SET slug = ? WHERE id = ?").run(slug, host.id);
+    // Park the old slug so links people already have keep resolving here.
+    db.prepare(
+      "INSERT OR REPLACE INTO slug_aliases (slug, host_id) VALUES (?, ?)"
+    ).run(oldSlug, host.id);
+  });
+  tx();
   redirect("/dashboard?saved=1");
 }
 

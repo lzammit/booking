@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
-import db, { EventType, Host } from "@/lib/db";
+import { notFound, redirect } from "next/navigation";
+import db, { EventType, hostBySlug } from "@/lib/db";
 import { pickLocale, t } from "@/lib/i18n";
 
 export default async function HostPage({
@@ -11,10 +11,11 @@ export default async function HostPage({
 }) {
   const { slug } = await params;
   const locale = pickLocale((await headers()).get("accept-language"));
-  const host = db.prepare("SELECT * FROM hosts WHERE slug = ?").get(slug) as
-    | Host
-    | undefined;
-  if (!host) notFound();
+  const resolved = hostBySlug(slug);
+  if (!resolved) notFound();
+  const { host, aliased } = resolved;
+  // Old (renamed) link — send visitors to the current one.
+  if (aliased) redirect(`/book/${host.slug}`);
   const eventTypes = db
     .prepare("SELECT * FROM event_types WHERE host_id = ? AND active = 1 ORDER BY duration_min")
     .all(host.id) as EventType[];

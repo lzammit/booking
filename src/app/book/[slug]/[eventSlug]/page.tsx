@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { headers } from "next/headers";
-import db, { EventType, Host } from "@/lib/db";
+import db, { EventType, hostBySlug } from "@/lib/db";
 import { pickLocale, t } from "@/lib/i18n";
 import BookingWidget from "./BookingWidget";
 
@@ -12,10 +12,11 @@ export default async function EventBookingPage({
 }) {
   const { slug, eventSlug } = await params;
   const locale = pickLocale((await headers()).get("accept-language"));
-  const host = db.prepare("SELECT * FROM hosts WHERE slug = ?").get(slug) as
-    | Host
-    | undefined;
-  if (!host) notFound();
+  const resolved = hostBySlug(slug);
+  if (!resolved) notFound();
+  const { host, aliased } = resolved;
+  // Old (renamed) link — preserve the chosen event type, current slug.
+  if (aliased) redirect(`/book/${host.slug}/${eventSlug}`);
   const eventType = db
     .prepare("SELECT * FROM event_types WHERE host_id = ? AND slug = ? AND active = 1")
     .get(host.id, eventSlug) as EventType | undefined;

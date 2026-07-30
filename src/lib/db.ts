@@ -97,6 +97,13 @@ function createDb() {
       used_at INTEGER -- unix seconds; null until consumed
     );
     CREATE INDEX IF NOT EXISTS idx_password_resets_host ON password_resets(host_id);
+    CREATE TABLE IF NOT EXISTS slug_aliases (
+      -- Previously-used booking slugs. When a host renames their link, the old
+      -- slug is parked here so shared links / email signatures keep working
+      -- (the booking page 308-redirects an alias to the current slug).
+      slug TEXT PRIMARY KEY,
+      host_id INTEGER NOT NULL REFERENCES hosts(id) ON DELETE CASCADE
+    );
   `);
   const bookingCols2 = db.prepare("PRAGMA table_info(bookings)").all() as { name: string }[];
   if (!bookingCols2.some((c) => c.name === "webex_link")) {
@@ -162,6 +169,27 @@ const db = globalForDb._bookingDb ?? createDb();
 globalForDb._bookingDb = db;
 
 export default db;
+
+/**
+ * Resolve a booking slug to its host. Current slugs win; a slug that was
+ * renamed away resolves through slug_aliases so old links keep working.
+ * `aliased` is true when the lookup matched a parked (old) slug — the caller
+ * should redirect to the host's current slug.
+ */
+export function hostBySlug(slug: string): { host: Host; aliased: boolean } | null {
+  const host = db.prepare("SELECT * FROM hosts WHERE slug = ?").get(slug) as
+    | Host
+    | undefined;
+  if (host) return { host, aliased: false };
+  const alias = db
+    .prepare("SELECT host_id FROM slug_aliases WHERE slug = ?")
+    .get(slug) as { host_id: number } | undefined;
+  if (!alias) return null;
+  const aliasedHost = db
+    .prepare("SELECT * FROM hosts WHERE id = ?")
+    .get(alias.host_id) as Host | undefined;
+  return aliasedHost ? { host: aliasedHost, aliased: true } : null;
+}
 
 export function getSetting(key: string): string | null {
   const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
