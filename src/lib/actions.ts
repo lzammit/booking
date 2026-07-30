@@ -16,7 +16,12 @@ import db, {
   signupCode,
 } from "./db";
 import { getSession, requireAdmin, requireHost } from "./session";
-import { sendAdminPromotionEmail, sendBookingEmails, sendInviteEmail } from "./email";
+import {
+  sendAdminPromotionEmail,
+  sendBookingEmails,
+  sendInviteEmail,
+  sendPasswordResetEmail,
+} from "./email";
 import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
 import { deleteWebexMeeting, webexDisconnect } from "./webex";
@@ -152,6 +157,86 @@ export async function logout() {
   const session = await getSession();
   session.destroy();
   redirect("/login");
+}
+
+const RESET_TTL_MS = 60 * 60 * 1000; // reset links are valid for one hour
+
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Start a password reset. Always redirects to the same "sent" page regardless
+ * of whether the email exists, so the form can't be used to enumerate accounts.
+ */
+export async function requestPasswordReset(formData: FormData) {
+  const ip = await requestIp();
+  const email = String(formData.get("email") || "").toLowerCase().trim();
+  // Throttle both per IP and per targeted account.
+  if (
+    !rateLimit(`reset:${ip}`, 5, 60 * 60 * 1000) ||
+    !rateLimit(`reset-email:${email}`, 5, 60 * 60 * 1000)
+  ) {
+    redirect("/forgot?sent=1");
+  }
+  if (z.string().email().max(200).safeParse(email).success) {
+    const host = db.prepare("SELECT * FROM hosts WHERE email = ?").get(email) as
+      | Host
+      | undefined;
+    if (host) {
+      // One live link at a time: drop any earlier unused tokens for this host.
+      db.prepare("DELETE FROM password_resets WHERE host_id = ?").run(host.id);
+      const token = randomBytes(32).toString("hex");
+      db.prepare(
+        "INSERT INTO password_resets (token_hash, host_id, expires_at) VALUES (?, ?, ?)"
+      ).run(hashToken(token), host.id, Date.now() + RESET_TTL_MS);
+      await sendPasswordResetEmail(
+        host.email,
+        host.name,
+        `${process.env.APP_URL}/reset/${token}`
+      );
+    }
+  }
+  redirect("/forgot?sent=1");
+}
+
+/** Look up a live (unused, unexpired) reset token; returns the host id or null. */
+export async function resetTokenHostId(token: string): Promise<number | null> {
+  const row = db
+    .prepare(
+      "SELECT host_id, expires_at, used_at FROM password_resets WHERE token_hash = ?"
+    )
+    .get(hashToken(token)) as
+    | { host_id: number; expires_at: number; used_at: number | null }
+    | undefined;
+  if (!row || row.used_at || row.expires_at < Date.now()) return null;
+  return row.host_id;
+}
+
+/** Consume a reset token and set a new password. */
+export async function resetPassword(formData: FormData) {
+  if (!rateLimit(`reset-submit:${await requestIp()}`, 10, 60 * 60 * 1000)) {
+    redirect("/login?error=" + encodeURIComponent("Too many attempts — try again later"));
+  }
+  const token = String(formData.get("token") || "");
+  const password = String(formData.get("password") || "");
+  const hostId = await resetTokenHostId(token);
+  if (!hostId) {
+    redirect("/reset/" + encodeURIComponent(token) + "?error=invalid");
+  }
+  if (password.length < 8 || password.length > 200) {
+    redirect("/reset/" + encodeURIComponent(token) + "?error=short");
+  }
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE hosts SET password_hash = ? WHERE id = ?").run(
+      bcrypt.hashSync(password, 10),
+      hostId
+    );
+    // Invalidate every reset token for the account once one is consumed.
+    db.prepare("DELETE FROM password_resets WHERE host_id = ?").run(hostId);
+  });
+  tx();
+  redirect("/login?reset=1");
 }
 
 const rulesSchema = z.array(

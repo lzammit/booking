@@ -90,6 +90,13 @@ function createDb() {
       refresh_token TEXT NOT NULL,
       expires_at INTEGER NOT NULL -- unix seconds
     );
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token_hash TEXT PRIMARY KEY, -- sha256 of the emailed token (never store raw)
+      host_id INTEGER NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+      expires_at INTEGER NOT NULL, -- unix seconds
+      used_at INTEGER -- unix seconds; null until consumed
+    );
+    CREATE INDEX IF NOT EXISTS idx_password_resets_host ON password_resets(host_id);
   `);
   const bookingCols2 = db.prepare("PRAGMA table_info(bookings)").all() as { name: string }[];
   if (!bookingCols2.some((c) => c.name === "webex_link")) {

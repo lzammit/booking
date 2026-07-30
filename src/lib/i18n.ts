@@ -93,6 +93,19 @@ const en = {
   passwordHint: "Password (8+ characters)",
   inviteCode: "Invite code",
   haveAccount: "Already have an account?",
+  forgotPassword: "Forgot password?",
+  forgot_title: "Reset your password",
+  forgot_intro: "Enter your account email and we'll send you a link to set a new password.",
+  forgot_button: "Send reset link",
+  forgot_sent:
+    "If that email has an account, a reset link is on its way. Check your inbox.",
+  backToLogin: "Back to log in",
+  reset_title: "Choose a new password",
+  reset_button: "Set new password",
+  reset_invalid:
+    "This reset link is invalid or has expired. Request a new one.",
+  reset_done: "Password updated. You can log in now.",
+  newPassword: "New password (8+ characters)",
   tzHint: "Timezone: {tz} (change later in Availability)",
   // Guest emails
   mail_confirmedSubject: "Confirmed: {what} — {when}",
@@ -177,6 +190,20 @@ const fr: Record<MessageKey, string> = {
   passwordHint: "Mot de passe (8 caractères ou plus)",
   inviteCode: "Code d’invitation",
   haveAccount: "Déjà un compte ?",
+  forgotPassword: "Mot de passe oublié ?",
+  forgot_title: "Réinitialiser votre mot de passe",
+  forgot_intro:
+    "Entrez le courriel de votre compte et nous vous enverrons un lien pour définir un nouveau mot de passe.",
+  forgot_button: "Envoyer le lien",
+  forgot_sent:
+    "Si ce courriel correspond à un compte, un lien de réinitialisation est en route. Vérifiez votre boîte de réception.",
+  backToLogin: "Retour à la connexion",
+  reset_title: "Choisir un nouveau mot de passe",
+  reset_button: "Définir le mot de passe",
+  reset_invalid:
+    "Ce lien de réinitialisation est invalide ou expiré. Demandez-en un nouveau.",
+  reset_done: "Mot de passe mis à jour. Vous pouvez vous connecter.",
+  newPassword: "Nouveau mot de passe (8 caractères ou plus)",
   tzHint: "Fuseau horaire : {tz} (modifiable plus tard)",
   mail_confirmedSubject: "Confirmé : {what} — {when}",
   mail_cancelledSubject: "Annulé : {what}",

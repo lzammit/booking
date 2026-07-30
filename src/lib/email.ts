@@ -94,6 +94,36 @@ export async function sendAdminPromotionEmail(
   }
 }
 
+/** Password-reset link. Best effort — never reveals whether the address exists. */
+export async function sendPasswordResetEmail(
+  to: string,
+  name: string,
+  resetUrl: string
+): Promise<boolean> {
+  const t = transport();
+  if (!t) return false;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  try {
+    await t.sendMail({
+      from,
+      to,
+      subject: "Reset your Booking password",
+      text: `Hi ${name},\n\nSomeone asked to reset the password for your Booking account. If that was you, open this link to choose a new one:\n\n${resetUrl}\n\nThe link expires in one hour. If you didn't request this, you can ignore this email — your password stays unchanged.\n`,
+      html: `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333;">
+<p>Hi ${name},</p>
+<p>Someone asked to reset the password for your Booking account. If that was you, choose a new one:</p>
+<p style="margin: 20px 0;"><a href="${resetUrl}" style="display: inline-block; background-color: #1C2333; color: #FBFAF7; text-decoration: none; font-weight: bold; padding: 10px 18px; border-radius: 8px;">Reset password</a></p>
+<p style="color: #6b7280; font-size: 12px;">Or open: <a href="${resetUrl}" style="color: #0563C1;">${resetUrl}</a></p>
+<p style="color: #6b7280; font-size: 12px;">The link expires in one hour. If you didn't request this, ignore this email — your password stays unchanged.</p>
+</div>`,
+    });
+    return true;
+  } catch (err) {
+    console.error("Password reset email failed:", err);
+    return false;
+  }
+}
+
 /** Invitation to create a host account. Returns false when sending failed. */
 export async function sendInviteEmail(
   to: string,
