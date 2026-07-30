@@ -116,6 +116,9 @@ Eight tables (`src/lib/db.ts`). Foreign keys cascade on host deletion.
 | `external_busy` | Busy intervals pushed by agents | `source`, `start_utc`, `end_utc` |
 | `agent_syncs` | Agent heartbeat | `source`, `last_sync`, `blocks` (drives the "Connected/Offline" badge) |
 | `settings` | Key/value app settings | `signup_code`, `admin_code`, `admin_code_enabled` |
+| `teams` | Round-robin groups of hosts | `name`, `slug` (public URL `/team/<slug>`) |
+| `team_members` | Group membership | `(team_id, host_id)` |
+| `team_event_types` | Meeting types offered on a team page | same shape as `event_types`, owned by the team |
 
 Times are stored in UTC (ISO 8601). Availability rules are stored in the host's
 local minutes-from-midnight and resolved against the host timezone at
@@ -140,6 +143,26 @@ computation time, so DST is handled by luxon rather than by stored offsets.
 Booking is re-validated server-side at commit time (`isSlotFree`) to close the
 race between rendering slots and submitting, so two people can't grab the same
 slot.
+
+### Teams (round-robin groups)
+
+A team (`src/lib/teams.ts`) is an admin-managed group of hosts — e.g. a
+support rotation — with one shared URL, `/team/<slug>`. Its meeting types live
+in `team_event_types`; a slot is offered when **any** member is free (union of
+per-member `computeSlots`, each computed against that member's own rules,
+bookings, and agent busy blocks). At commit time the server re-checks who is
+still free and assigns the member with the fewest upcoming confirmed bookings
+(ties broken randomly).
+
+The resulting row is a completely normal booking on that member, so emails,
+Webex, cancel/reschedule, the macOS agent, and the ICS feed need no team
+awareness. The one wrinkle: `bookings.event_type_id` must reference a real
+`event_types` row, so each member gets a hidden per-team-event-type "shadow"
+row (`active = 0`, marked by `event_types.team_event_type_id`, excluded from
+their editor and public page), created on first booking and re-synced with the
+team event type on every subsequent one. `bookings.team_id` tags the origin
+for the "via <team>" label on the member's dashboard. Deleting a team keeps
+members' existing bookings and shadow rows — history stays intact.
 
 ## Calendar sync paths
 
@@ -170,8 +193,8 @@ The ICS feed and agent-pull authenticate differently on purpose:
 
 | Route | Auth | Purpose |
 |---|---|---|
-| `GET /api/slots` | none | Available slots for an event type over a date range. |
-| `POST /api/book` | none | Create a booking (re-validates availability; sets the join link from a connected Webex account's new meeting, else the event type's static meeting link; sends emails; optional M365 event). |
+| `GET /api/slots` | none | Available slots for an event type over a date range. `teamEventTypeId` instead of `eventTypeId` returns the team union. |
+| `POST /api/book` | none | Create a booking (re-validates availability; sets the join link from a connected Webex account's new meeting, else the event type's static meeting link; sends emails; optional M365 event). With `teamEventTypeId`, first assigns the least-loaded free team member. |
 | `GET /api/webex/connect`, `GET /api/webex/callback` | session | Webex OAuth flow (optional). |
 | `GET /api/feed/[token]` | URL token | Host's bookings as a subscribable ICS calendar. |
 | `POST /api/busy` | Bearer (api_token) | Agent pushes busy intervals + heartbeat. |

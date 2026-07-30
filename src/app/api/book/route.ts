@@ -2,15 +2,18 @@ import { randomBytes } from "crypto";
 import { DateTime } from "luxon";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import db, { Booking, EventType, Host } from "@/lib/db";
+import db, { Booking, EventType, Host, Team, TeamEventType } from "@/lib/db";
 import { isSlotFree } from "@/lib/slots";
+import { pickMemberForSlot, shadowEventTypeFor } from "@/lib/teams";
 import { sendBookingEmails } from "@/lib/email";
 import { createOutlookEvent } from "@/lib/msgraph";
 import { createWebexMeeting } from "@/lib/webex";
 import { cleanText, clientIp, rateLimit } from "@/lib/ratelimit";
 
 const bookSchema = z.object({
-  eventTypeId: z.number().int(),
+  // Exactly one of the two: a host's event type, or a team's (round-robin).
+  eventTypeId: z.number().int().optional(),
+  teamEventTypeId: z.number().int().optional(),
   start: z.string(),
   name: z.string().min(1).max(120).transform(cleanText).refine((s) => s.length > 0),
   company: z.string().min(1).max(120).transform(cleanText).refine((s) => s.length > 0),
@@ -39,32 +42,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid booking data" }, { status: 400 });
   }
 
-  const eventType = db
-    .prepare("SELECT * FROM event_types WHERE id = ? AND active = 1")
-    .get(input.eventTypeId) as EventType | undefined;
-  if (!eventType) {
-    return NextResponse.json({ error: "Event type not found" }, { status: 404 });
+  if (!input.eventTypeId === !input.teamEventTypeId) {
+    return NextResponse.json({ error: "Invalid booking data" }, { status: 400 });
   }
-  const host = db
-    .prepare("SELECT * FROM hosts WHERE id = ?")
-    .get(eventType.host_id) as Host;
 
   const start = DateTime.fromISO(input.start, { zone: "utc" });
   if (!start.isValid) {
     return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
   }
   const startIso = start.toISO()!;
-  const endIso = start.plus({ minutes: eventType.duration_min }).toISO()!;
 
-  if (!(await isSlotFree(host, eventType, startIso))) {
-    return NextResponse.json(
-      {
-        error: "That time is no longer available. Please pick another slot.",
-        code: "slot_taken",
-      },
-      { status: 409 }
-    );
+  const slotTaken = NextResponse.json(
+    {
+      error: "That time is no longer available. Please pick another slot.",
+      code: "slot_taken",
+    },
+    { status: 409 }
+  );
+
+  let host: Host;
+  let eventType: EventType;
+  let teamId: number | null = null;
+  if (input.teamEventTypeId) {
+    // Team booking: assign the free member with the lightest schedule, then
+    // proceed exactly like a direct booking on that member.
+    const tet = db
+      .prepare("SELECT * FROM team_event_types WHERE id = ? AND active = 1")
+      .get(input.teamEventTypeId) as TeamEventType | undefined;
+    const team = tet
+      ? (db.prepare("SELECT * FROM teams WHERE id = ?").get(tet.team_id) as Team)
+      : undefined;
+    if (!tet || !team) {
+      return NextResponse.json({ error: "Event type not found" }, { status: 404 });
+    }
+    const member = await pickMemberForSlot(team, tet, startIso);
+    if (!member) return slotTaken;
+    host = member;
+    eventType = shadowEventTypeFor(member, tet);
+    teamId = team.id;
+  } else {
+    const et = db
+      .prepare("SELECT * FROM event_types WHERE id = ? AND active = 1")
+      .get(input.eventTypeId) as EventType | undefined;
+    if (!et) {
+      return NextResponse.json({ error: "Event type not found" }, { status: 404 });
+    }
+    eventType = et;
+    host = db.prepare("SELECT * FROM hosts WHERE id = ?").get(et.host_id) as Host;
+    if (!(await isSlotFree(host, eventType, startIso))) return slotTaken;
   }
+
+  const endIso = start.plus({ minutes: eventType.duration_min }).toISO()!;
 
   let tzOk = input.timezone;
   try {
@@ -76,12 +104,13 @@ export async function POST(req: NextRequest) {
   const cancelToken = randomBytes(24).toString("hex");
   const res = db
     .prepare(
-      `INSERT INTO bookings (host_id, event_type_id, guest_name, guest_email, guest_company, guest_timezone, guest_locale, notes, start_utc, end_utc, cancel_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO bookings (host_id, event_type_id, team_id, guest_name, guest_email, guest_company, guest_timezone, guest_locale, notes, start_utc, end_utc, cancel_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       host.id,
       eventType.id,
+      teamId,
       input.name,
       input.email,
       input.company,

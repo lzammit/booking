@@ -15,20 +15,22 @@ export default async function DashboardPage({
   const nowIso = DateTime.utc().toISO();
   const upcoming = db
     .prepare(
-      `SELECT b.*, e.name AS event_name FROM bookings b
+      `SELECT b.*, e.name AS event_name, t.name AS team_name FROM bookings b
        JOIN event_types e ON e.id = b.event_type_id
+       LEFT JOIN teams t ON t.id = b.team_id
        WHERE b.host_id = ? AND b.status = 'confirmed' AND b.end_utc > ?
        ORDER BY b.start_utc LIMIT 50`
     )
-    .all(host.id, nowIso) as (Booking & { event_name: string })[];
+    .all(host.id, nowIso) as (Booking & { event_name: string; team_name: string | null })[];
   const past = db
     .prepare(
-      `SELECT b.*, e.name AS event_name FROM bookings b
+      `SELECT b.*, e.name AS event_name, t.name AS team_name FROM bookings b
        JOIN event_types e ON e.id = b.event_type_id
+       LEFT JOIN teams t ON t.id = b.team_id
        WHERE b.host_id = ? AND NOT (b.status = 'confirmed' AND b.end_utc > ?)
        ORDER BY b.start_utc DESC LIMIT 20`
     )
-    .all(host.id, nowIso) as (Booking & { event_name: string })[];
+    .all(host.id, nowIso) as (Booking & { event_name: string; team_name: string | null })[];
   const eventTypeCount = (
     db.prepare("SELECT COUNT(*) AS c FROM event_types WHERE host_id = ? AND active = 1").get(host.id) as { c: number }
   ).c;
@@ -102,6 +104,11 @@ export default async function DashboardPage({
                     {b.event_name} — {b.guest_name}
                     {b.guest_company && (
                       <span className="text-gray-500"> ({b.guest_company})</span>
+                    )}
+                    {b.team_name && (
+                      <span className="ml-2 rounded-full bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs font-medium text-purple-700">
+                        via {b.team_name}
+                      </span>
                     )}
                   </div>
                   <div className="text-sm text-gray-500">

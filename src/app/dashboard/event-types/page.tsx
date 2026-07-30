@@ -98,7 +98,9 @@ export default async function EventTypesPage({
   const { error } = await searchParams;
   const host = await requireHost();
   const eventTypes = db
-    .prepare("SELECT * FROM event_types WHERE host_id = ? ORDER BY id")
+    // Shadow copies of team event types are managed from the admin Teams
+    // section, not the host's own editor.
+    .prepare("SELECT * FROM event_types WHERE host_id = ? AND team_event_type_id IS NULL ORDER BY id")
     .all(host.id) as EventType[];
 
   return (

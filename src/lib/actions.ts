@@ -568,6 +568,108 @@ export async function adminSetSignupCode(formData: FormData) {
   redirect("/dashboard/admin?saved=1");
 }
 
+// ----- Teams (admin-managed groups with a shared round-robin booking URL) -----
+
+export async function adminCreateTeam(formData: FormData) {
+  await requireAdmin();
+  const name = cleanText(String(formData.get("name") || "")).slice(0, 80);
+  if (!name) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("Team name is required"));
+  }
+  const taken = db.prepare("SELECT 1 FROM teams WHERE slug = ?");
+  let slug = slugify(name) || "team";
+  const base = slug;
+  let n = 2;
+  while (taken.get(slug)) slug = `${base}-${n++}`;
+  const res = db.prepare("INSERT INTO teams (name, slug) VALUES (?, ?)").run(name, slug);
+  // Start with a sensible default meeting type so the page works right away.
+  db.prepare(
+    "INSERT INTO team_event_types (team_id, name, slug, duration_min) VALUES (?, '30 minute meeting', '30min', 30)"
+  ).run(Number(res.lastInsertRowid));
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminDeleteTeam(formData: FormData) {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  // Members' past bookings survive: they live on the member (host_id) with a
+  // shadow event type row; only the team, its URL, and its meeting types go.
+  db.prepare("DELETE FROM teams WHERE id = ?").run(id);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminAddTeamMember(formData: FormData) {
+  await requireAdmin();
+  const teamId = Number(formData.get("team_id"));
+  const hostId = Number(formData.get("host_id"));
+  if (!db.prepare("SELECT 1 FROM hosts WHERE id = ?").get(hostId)) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("Pick a user to add"));
+  }
+  db.prepare(
+    "INSERT OR IGNORE INTO team_members (team_id, host_id) VALUES (?, ?)"
+  ).run(teamId, hostId);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminRemoveTeamMember(formData: FormData) {
+  await requireAdmin();
+  db.prepare("DELETE FROM team_members WHERE team_id = ? AND host_id = ?").run(
+    Number(formData.get("team_id")),
+    Number(formData.get("host_id"))
+  );
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminCreateTeamEventType(formData: FormData) {
+  await requireAdmin();
+  const teamId = Number(formData.get("team_id"));
+  const parsed = eventTypeSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("Invalid meeting type data"));
+  }
+  const d = parsed.data;
+  let slug = slugify(d.name) || "meeting";
+  const taken = db.prepare("SELECT 1 FROM team_event_types WHERE team_id = ? AND slug = ?");
+  const base = slug;
+  let n = 2;
+  while (taken.get(teamId, slug)) slug = `${base}-${n++}`;
+  db.prepare(
+    `INSERT INTO team_event_types (team_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days, meeting_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(teamId, d.name, slug, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminUpdateTeamEventType(formData: FormData) {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  const parsed = eventTypeSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("Invalid meeting type data"));
+  }
+  const d = parsed.data;
+  db.prepare(
+    `UPDATE team_event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, meeting_url=?
+     WHERE id = ?`
+  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url, id);
+  // Members' shadow copies re-sync on the next booking (shadowEventTypeFor).
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminToggleTeamEventType(formData: FormData) {
+  await requireAdmin();
+  db.prepare("UPDATE team_event_types SET active = 1 - active WHERE id = ?").run(
+    Number(formData.get("id"))
+  );
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminDeleteTeamEventType(formData: FormData) {
+  await requireAdmin();
+  db.prepare("DELETE FROM team_event_types WHERE id = ?").run(Number(formData.get("id")));
+  redirect("/dashboard/admin?saved=1");
+}
+
 export async function adminResetPassword(formData: FormData) {
   await requireAdmin();
   const id = Number(formData.get("id"));

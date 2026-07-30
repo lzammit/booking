@@ -1,14 +1,22 @@
 import { DateTime } from "luxon";
-import db, { adminCode, adminCodeEnabled, signupCode } from "@/lib/db";
+import db, { adminCode, adminCodeEnabled, signupCode, Team, TeamEventType } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import {
+  adminAddTeamMember,
+  adminCreateTeam,
+  adminCreateTeamEventType,
   adminDeleteHost,
+  adminDeleteTeam,
+  adminDeleteTeamEventType,
   adminInviteUser,
+  adminRemoveTeamMember,
   adminResetPassword,
   adminSetAdminCode,
   adminSetSignupCode,
   adminToggleAdmin,
   adminToggleAdminCode,
+  adminToggleTeamEventType,
+  adminUpdateTeamEventType,
 } from "@/lib/actions";
 import ConfirmSubmit from "./ConfirmSubmit";
 
@@ -44,6 +52,31 @@ export default async function AdminPage({
        FROM hosts h ORDER BY h.id`
     )
     .all(nowIso) as HostRow[];
+
+  const teams = db.prepare("SELECT * FROM teams ORDER BY name").all() as Team[];
+  const membersByTeam = new Map<number, { id: number; name: string; email: string }[]>();
+  const eventTypesByTeam = new Map<number, TeamEventType[]>();
+  const teamBookings = db.prepare(
+    "SELECT COUNT(*) AS c FROM bookings WHERE team_id = ? AND status = 'confirmed' AND end_utc > ?"
+  );
+  for (const team of teams) {
+    membersByTeam.set(
+      team.id,
+      db
+        .prepare(
+          `SELECT h.id, h.name, h.email FROM hosts h
+           JOIN team_members m ON m.host_id = h.id
+           WHERE m.team_id = ? ORDER BY h.name`
+        )
+        .all(team.id) as { id: number; name: string; email: string }[]
+    );
+    eventTypesByTeam.set(
+      team.id,
+      db
+        .prepare("SELECT * FROM team_event_types WHERE team_id = ? ORDER BY id")
+        .all(team.id) as TeamEventType[]
+    );
+  }
 
   const agentLabel = (last: string | null) => {
     if (!last) return { text: "never", live: false };
@@ -254,6 +287,231 @@ export default async function AdminPage({
           );
         })}
       </div>
+
+      <div className="pt-4">
+        <h1 className="text-2xl font-bold">Teams</h1>
+        <p className="text-sm text-gray-500">
+          A team has one shared booking link that offers every slot where at least one
+          member is free. Bookings go to the free member with the fewest upcoming
+          meetings, and land on that member&apos;s calendar like any direct booking.
+        </p>
+      </div>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Create a team</h2>
+        <form action={adminCreateTeam} className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            name="name"
+            required
+            placeholder="e.g. Product Support Engineers"
+            className="w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+          />
+          <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+            Create team
+          </button>
+        </form>
+      </section>
+
+      {teams.map((team) => {
+        const members = membersByTeam.get(team.id) ?? [];
+        const memberIds = new Set(members.map((m) => m.id));
+        const candidates = hosts.filter((h) => !memberIds.has(h.id));
+        const eventTypes = eventTypesByTeam.get(team.id) ?? [];
+        const upcoming = (teamBookings.get(team.id, nowIso) as { c: number }).c;
+        const etFields = (et?: TeamEventType) => (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <input
+              name="name"
+              required
+              defaultValue={et?.name}
+              placeholder="Meeting name"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm sm:col-span-2"
+            />
+            <label className="text-sm text-gray-600">
+              Duration (min)
+              <input
+                name="duration_min"
+                type="number"
+                min={5}
+                max={480}
+                defaultValue={et?.duration_min ?? 30}
+                className="mt-0.5 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+              />
+            </label>
+            <label className="text-sm text-gray-600">
+              Buffer (min)
+              <input
+                name="buffer_min"
+                type="number"
+                min={0}
+                max={120}
+                defaultValue={et?.buffer_min ?? 0}
+                className="mt-0.5 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+              />
+            </label>
+            <label className="text-sm text-gray-600">
+              Min notice (min)
+              <input
+                name="min_notice_min"
+                type="number"
+                min={0}
+                max={10080}
+                defaultValue={et?.min_notice_min ?? 120}
+                className="mt-0.5 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+              />
+            </label>
+            <label className="text-sm text-gray-600">
+              Booking window (days)
+              <input
+                name="window_days"
+                type="number"
+                min={1}
+                max={365}
+                defaultValue={et?.window_days ?? 30}
+                className="mt-0.5 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+              />
+            </label>
+            <input
+              name="description"
+              defaultValue={et?.description}
+              placeholder="Description (optional)"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm sm:col-span-2"
+            />
+            <input
+              name="meeting_url"
+              defaultValue={et?.meeting_url}
+              placeholder="Static meeting link, e.g. Webex room (optional)"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm sm:col-span-2"
+            />
+          </div>
+        );
+        return (
+          <section key={team.id} className="rounded-xl border border-gray-200 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{team.name}</span>
+              <a
+                href={`/team/${team.slug}`}
+                target="_blank"
+                className="text-sm text-blue-600 hover:underline"
+              >
+                /team/{team.slug}
+              </a>
+              <span className="text-sm text-gray-500">
+                · {members.length} member{members.length === 1 ? "" : "s"} · {upcoming}{" "}
+                upcoming
+              </span>
+              <form action={adminDeleteTeam} className="ml-auto">
+                <input type="hidden" name="id" value={team.id} />
+                <ConfirmSubmit
+                  label="Delete team"
+                  confirmText={`Delete team ${team.name}? Its booking link stops working; members and their existing bookings are kept.`}
+                />
+              </form>
+            </div>
+
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <h3 className="text-sm font-medium text-gray-700">Members</h3>
+              <ul className="mt-2 space-y-1">
+                {members.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2 text-sm">
+                    <span>{m.name}</span>
+                    <span className="text-gray-400">{m.email}</span>
+                    <form action={adminRemoveTeamMember}>
+                      <input type="hidden" name="team_id" value={team.id} />
+                      <input type="hidden" name="host_id" value={m.id} />
+                      <button
+                        className="text-gray-400 hover:text-red-600"
+                        title={`Remove ${m.name} from ${team.name}`}
+                      >
+                        ✕
+                      </button>
+                    </form>
+                  </li>
+                ))}
+                {members.length === 0 && (
+                  <li className="text-sm text-amber-700">
+                    No members yet — the booking page shows no availability until someone
+                    is added.
+                  </li>
+                )}
+              </ul>
+              {candidates.length > 0 && (
+                <form action={adminAddTeamMember} className="mt-2 flex items-center gap-2">
+                  <input type="hidden" name="team_id" value={team.id} />
+                  <select
+                    name="host_id"
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                  >
+                    {candidates.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.name} ({h.email})
+                      </option>
+                    ))}
+                  </select>
+                  <button className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
+                    Add member
+                  </button>
+                </form>
+              )}
+            </div>
+
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <h3 className="text-sm font-medium text-gray-700">Meeting types</h3>
+              <ul className="mt-2 space-y-2">
+                {eventTypes.map((et) => (
+                  <li key={et.id} className="rounded-lg border border-gray-100 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className={et.active ? "" : "text-gray-400 line-through"}>
+                        {et.name}
+                      </span>
+                      <span className="text-gray-400">{et.duration_min} min</span>
+                      <span className="ml-auto flex items-center gap-2">
+                        <form action={adminToggleTeamEventType}>
+                          <input type="hidden" name="id" value={et.id} />
+                          <button className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs hover:bg-gray-50">
+                            {et.active ? "Deactivate" : "Activate"}
+                          </button>
+                        </form>
+                        <form action={adminDeleteTeamEventType}>
+                          <input type="hidden" name="id" value={et.id} />
+                          <ConfirmSubmit
+                            label="Delete"
+                            confirmText={`Delete meeting type "${et.name}" from ${team.name}?`}
+                          />
+                        </form>
+                      </span>
+                    </div>
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-800">
+                        Edit
+                      </summary>
+                      <form action={adminUpdateTeamEventType}>
+                        <input type="hidden" name="id" value={et.id} />
+                        {etFields(et)}
+                        <button className="mt-2 rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+                          Save
+                        </button>
+                      </form>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-sm text-blue-600 hover:underline">
+                  Add a meeting type
+                </summary>
+                <form action={adminCreateTeamEventType}>
+                  <input type="hidden" name="team_id" value={team.id} />
+                  {etFields()}
+                  <button className="mt-2 rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+                    Add meeting type
+                  </button>
+                </form>
+              </details>
+            </div>
+          </section>
+        );
+      })}
     </main>
   );
 }

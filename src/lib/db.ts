@@ -97,6 +97,34 @@ function createDb() {
       used_at INTEGER -- unix seconds; null until consumed
     );
     CREATE INDEX IF NOT EXISTS idx_password_resets_host ON password_resets(host_id);
+    CREATE TABLE IF NOT EXISTS teams (
+      -- A group of hosts (e.g. "PSE") booked round-robin from one shared URL.
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE, -- public URL: /team/<slug>
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS team_members (
+      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      host_id INTEGER NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+      PRIMARY KEY (team_id, host_id)
+    );
+    CREATE TABLE IF NOT EXISTS team_event_types (
+      -- Meeting types offered on the team page. A slot is open when ANY member
+      -- is free; booking assigns one free member (see lib/teams.ts).
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      duration_min INTEGER NOT NULL DEFAULT 30,
+      buffer_min INTEGER NOT NULL DEFAULT 0,
+      min_notice_min INTEGER NOT NULL DEFAULT 120,
+      window_days INTEGER NOT NULL DEFAULT 30,
+      active INTEGER NOT NULL DEFAULT 1,
+      meeting_url TEXT NOT NULL DEFAULT '',
+      UNIQUE(team_id, slug)
+    );
     CREATE TABLE IF NOT EXISTS slug_aliases (
       -- Previously-used booking slugs. When a host renames their link, the old
       -- slug is parked here so shared links / email signatures keep working
@@ -143,6 +171,15 @@ function createDb() {
   const etCols = db.prepare("PRAGMA table_info(event_types)").all() as { name: string }[];
   if (!etCols.some((c) => c.name === "meeting_url")) {
     db.exec("ALTER TABLE event_types ADD COLUMN meeting_url TEXT NOT NULL DEFAULT ''");
+  }
+  if (!etCols.some((c) => c.name === "team_event_type_id")) {
+    // Marks a hidden per-member "shadow" of a team event type (see lib/teams.ts).
+    // Shadow rows are excluded from the host's event-type editor and public page.
+    db.exec("ALTER TABLE event_types ADD COLUMN team_event_type_id INTEGER");
+  }
+  if (!bookingCols.some((c) => c.name === "team_id")) {
+    // Set when the booking came through a team page, for the "via <team>" label.
+    db.exec("ALTER TABLE bookings ADD COLUMN team_id INTEGER");
   }
   if (!hostCols.some((c) => c.name === "ics_url")) {
     db.exec("ALTER TABLE hosts ADD COLUMN ics_url TEXT");
@@ -248,6 +285,28 @@ export interface EventType {
   window_days: number;
   active: number;
   meeting_url: string;
+  team_event_type_id: number | null;
+}
+
+export interface Team {
+  id: number;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+export interface TeamEventType {
+  id: number;
+  team_id: number;
+  name: string;
+  slug: string;
+  description: string;
+  duration_min: number;
+  buffer_min: number;
+  min_notice_min: number;
+  window_days: number;
+  active: number;
+  meeting_url: string;
 }
 
 export interface AvailabilityRule {
@@ -262,6 +321,7 @@ export interface Booking {
   id: number;
   host_id: number;
   event_type_id: number;
+  team_id: number | null;
   guest_name: string;
   guest_email: string;
   guest_company: string;

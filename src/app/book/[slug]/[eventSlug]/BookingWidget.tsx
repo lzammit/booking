@@ -13,7 +13,10 @@ import { Locale, t } from "@/lib/i18n";
  */
 
 interface Props {
-  eventTypeId: number;
+  /** A host's event type… */
+  eventTypeId?: number;
+  /** …or a team's (round-robin: the server assigns a free member). */
+  teamEventTypeId?: number;
   durationMin: number;
   windowDays: number;
   hostName: string;
@@ -65,6 +68,7 @@ function zonedParts(iso: string, tz: string): { ymd: string; hour: number; minut
 
 export default function BookingWidget({
   eventTypeId,
+  teamEventTypeId,
   durationMin,
   hostName,
   hostTimezone,
@@ -99,8 +103,11 @@ export default function BookingWidget({
     const from = ymd(monthStart);
     const to = ymd(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
     try {
+      const idParam = teamEventTypeId
+        ? `teamEventTypeId=${teamEventTypeId}`
+        : `eventTypeId=${eventTypeId}`;
       const res = await fetch(
-        `/api/slots?eventTypeId=${eventTypeId}&from=${from}&to=${to}${rescheduleToken ? `&exclude=${encodeURIComponent(rescheduleToken)}` : ""}`
+        `/api/slots?${idParam}&from=${from}&to=${to}${rescheduleToken ? `&exclude=${encodeURIComponent(rescheduleToken)}` : ""}`
       );
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as { slots: string[] };
@@ -109,7 +116,7 @@ export default function BookingWidget({
       setError(t(locale, "errLoad"));
       setSlots([]);
     }
-  }, [eventTypeId, monthStart, rescheduleToken]);
+  }, [eventTypeId, teamEventTypeId, monthStart, rescheduleToken]);
 
   useEffect(() => {
     loadMonth();
@@ -184,7 +191,7 @@ export default function BookingWidget({
           rescheduleToken
             ? { token: rescheduleToken, start: selectedSlot, timezone: tz, locale }
             : {
-                eventTypeId,
+                ...(teamEventTypeId ? { teamEventTypeId } : { eventTypeId }),
                 start: selectedSlot,
                 name: fd.get("name"),
                 company: fd.get("company"),

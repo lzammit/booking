@@ -26,6 +26,10 @@ const en = {
     "Pick a meeting, then a time that suits you. Times are shown in your own timezone.",
   nothingOpen: "Nothing is open for booking right now.",
   min: "min",
+  // Team landing page
+  teamIntro:
+    "Pick a meeting, then a time that suits you — you'll be matched with an available member of the team.",
+  teamMatched: "You'll be matched with an available member of the team.",
   // Event booking page
   allMeetingTypes: "All meeting types",
   // Widget
@@ -129,6 +133,9 @@ const fr: Record<MessageKey, string> = {
   pickMeetingIntro:
     "Choisissez un type de rencontre, puis une heure qui vous convient. Les heures sont affichées dans votre fuseau horaire.",
   nothingOpen: "Aucune réservation n’est ouverte pour le moment.",
+  teamIntro:
+    "Choisissez une réunion, puis une heure qui vous convient — un membre disponible de l’équipe vous sera attribué.",
+  teamMatched: "Un membre disponible de l’équipe vous sera attribué.",
   min: "min",
   allMeetingTypes: "Tous les types de rencontre",
   weekdaysShort: "Lu,Ma,Me,Je,Ve,Sa,Di",
