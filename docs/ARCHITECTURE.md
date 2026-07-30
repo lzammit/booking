@@ -275,10 +275,12 @@ The database migrates itself on startup; no separate migration step.
 ### macOS agent packaging
 
 The agent is built and packaged from `mac-agent/` (`build.sh` compiles the
-`.app`; `install.sh` installs it locally). The server serves a prebuilt zip
-from `AGENT_ZIP` (default `/opt/booking/agent/BookingAgent.app.zip`) via
+`.app`; `install.sh` installs it locally; `package-dmg.sh` notarizes and
+produces the distributable DMG). The server serves a prebuilt zip from
+`AGENT_ZIP` (default `/opt/booking/agent/BookingAgent.app.zip`) via
 `/api/agent/download`, injecting a per-host config sidecar so a downloaded copy
-is ready to run. Because the app is signed with a local/ad-hoc certificate,
-first launch on a managed Mac may require clearing the quarantine attribute
-(`xattr -dr com.apple.quarantine <app>`) — an Apple Developer ID + notarization
-removes that step.
+is ready to run. The app is Developer ID-signed, hardened-runtime, notarized,
+and stapled, so downloads open without Gatekeeper prompts. Note: the hardened
+runtime requires the `com.apple.security.personal-information.calendars`
+entitlement — without it, macOS silently denies EventKit access (no permission
+prompt, and the app never appears in Privacy & Security → Calendars).
