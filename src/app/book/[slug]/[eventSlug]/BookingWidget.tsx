@@ -96,7 +96,9 @@ export default function BookingWidget({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [confirmed, setConfirmed] = useState<{ start: string } | null>(null);
+  const [confirmed, setConfirmed] = useState<{ start: string; host?: string } | null>(
+    null
+  );
 
   const loadMonth = useCallback(async () => {
     setSlots(null);
@@ -207,7 +209,7 @@ export default function BookingWidget({
         const known = data.code === "slot_taken" || data.code === "rate_limited";
         throw new Error(known ? t(locale, data.code) : data.error || t(locale, "errGeneric"));
       }
-      setConfirmed({ start: selectedSlot });
+      setConfirmed({ start: selectedSlot, host: data.hostName });
     } catch (err) {
       setError(err instanceof Error ? err.message : t(locale, "errGeneric"));
       loadMonth();
@@ -241,6 +243,11 @@ export default function BookingWidget({
         {tz !== hostTimezone && (
           <p className="mt-1 font-mono text-xs text-ink/50">
             {t(locale, "forHost", { time: timeLabel(confirmed.start, hostTimezone), host: hostName })} ({hostTimezone})
+          </p>
+        )}
+        {teamEventTypeId && confirmed.host && (
+          <p className="mt-3 text-sm font-medium text-ink">
+            {t(locale, "teamAssigned", { name: confirmed.host })}
           </p>
         )}
         <p className="mt-2 text-sm text-ink/60">

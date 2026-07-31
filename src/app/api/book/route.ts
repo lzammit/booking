@@ -164,5 +164,6 @@ export async function POST(req: NextRequest) {
   }
   await sendBookingEmails(booking, host, eventType, "confirmed");
 
-  return NextResponse.json({ ok: true, bookingId: booking.id });
+  // hostName tells a team-booking guest which member they were matched with.
+  return NextResponse.json({ ok: true, bookingId: booking.id, hostName: host.name });
 }

@@ -30,6 +30,7 @@ const en = {
   teamIntro:
     "Pick a meeting, then a time that suits you — you'll be matched with an available member of the team.",
   teamMatched: "You'll be matched with an available member of the team.",
+  teamAssigned: "Your meeting will be with {name}.",
   // Event booking page
   allMeetingTypes: "All meeting types",
   // Widget
@@ -136,6 +137,7 @@ const fr: Record<MessageKey, string> = {
   teamIntro:
     "Choisissez une réunion, puis une heure qui vous convient — un membre disponible de l’équipe vous sera attribué.",
   teamMatched: "Un membre disponible de l’équipe vous sera attribué.",
+  teamAssigned: "Votre réunion sera avec {name}.",
   min: "min",
   allMeetingTypes: "Tous les types de rencontre",
   weekdaysShort: "Lu,Ma,Me,Je,Ve,Sa,Di",
