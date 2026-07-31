@@ -27,6 +27,30 @@ export function teamMembers(teamId: number): Host[] {
     .all(teamId) as Host[];
 }
 
+/** A check-in older than this means the member's busy data can't be trusted. */
+export const AGENT_FRESH_MINUTES = 15;
+
+/**
+ * Whether a member's busy data is current: a live agent check-in, or a
+ * subscribed ICS feed (server-polled on demand, so always fresh at booking
+ * time). Members without either are EXCLUDED from team slots and the
+ * round-robin — with no busy sync the app would book over their real
+ * meetings.
+ */
+export function memberConnected(host: Host): boolean {
+  if (host.ics_url) return true;
+  const row = db
+    .prepare("SELECT MAX(last_sync) AS last FROM agent_syncs WHERE host_id = ?")
+    .get(host.id) as { last: string | null };
+  if (!row.last) return false;
+  const dt = DateTime.fromSQL(row.last, { zone: "utc" });
+  return dt.isValid && DateTime.utc().diff(dt, "minutes").minutes < AGENT_FRESH_MINUTES;
+}
+
+export function connectedMembers(teamId: number): Host[] {
+  return teamMembers(teamId).filter(memberConnected);
+}
+
 /**
  * A member's availability for a team event type is computed with their OWN
  * rules/bookings/busy blocks but the TEAM event type's duration, buffer,
@@ -43,7 +67,7 @@ export async function computeTeamSlots(
   fromDate: string,
   toDate: string
 ): Promise<string[]> {
-  const members = teamMembers(team.id);
+  const members = connectedMembers(team.id);
   const all = await Promise.all(
     members.map((m) => computeSlots(m, asMemberEventType(tet, m), fromDate, toDate))
   );
@@ -64,7 +88,7 @@ export async function pickMemberForSlot(
   const start = DateTime.fromISO(startUtcISO, { zone: "utc" });
   if (!start.isValid) return null;
   const free: Host[] = [];
-  for (const m of teamMembers(team.id)) {
+  for (const m of connectedMembers(team.id)) {
     const day = start.setZone(m.timezone).toISODate();
     if (!day) continue;
     const slots = await computeSlots(m, asMemberEventType(tet, m), day, day);

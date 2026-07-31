@@ -154,6 +154,12 @@ bookings, and agent busy blocks). At commit time the server re-checks who is
 still free and assigns the member with the fewest upcoming confirmed bookings
 (ties broken randomly).
 
+Only members with **current busy data** participate — an agent check-in within
+`AGENT_FRESH_MINUTES` (15) or a subscribed ICS feed. Without busy sync the app
+would book over meetings it can't see, so such members are excluded from both
+the slot union and the assignment (shown red in the admin Teams section, green
+when live).
+
 The resulting row is a completely normal booking on that member, so emails,
 Webex, cancel/reschedule, the macOS agent, and the ICS feed need no team
 awareness. The one wrinkle: `bookings.event_type_id` must reference a real

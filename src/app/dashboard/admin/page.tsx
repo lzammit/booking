@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 import db, { adminCode, adminCodeEnabled, signupCode, Team, TeamEventType } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
+import { AGENT_FRESH_MINUTES } from "@/lib/teams";
 import {
   adminAddTeamMember,
   adminCreateTeam,
@@ -54,7 +55,23 @@ export default async function AdminPage({
     .all(nowIso) as HostRow[];
 
   const teams = db.prepare("SELECT * FROM teams ORDER BY name").all() as Team[];
-  const membersByTeam = new Map<number, { id: number; name: string; email: string }[]>();
+  interface MemberRow {
+    id: number;
+    name: string;
+    email: string;
+    ics_url: string | null;
+    last_sync: string | null;
+  }
+  // Same rule as lib/teams.ts memberConnected: an ICS feed subscription, or an
+  // agent check-in fresher than AGENT_FRESH_MINUTES. Red members are excluded
+  // from the team's slots and round-robin.
+  const memberLive = (m: MemberRow) => {
+    if (m.ics_url) return true;
+    if (!m.last_sync) return false;
+    const dt = DateTime.fromSQL(m.last_sync, { zone: "utc" });
+    return dt.isValid && DateTime.utc().diff(dt, "minutes").minutes < AGENT_FRESH_MINUTES;
+  };
+  const membersByTeam = new Map<number, MemberRow[]>();
   const eventTypesByTeam = new Map<number, TeamEventType[]>();
   const teamBookings = db.prepare(
     "SELECT COUNT(*) AS c FROM bookings WHERE team_id = ? AND status = 'confirmed' AND end_utc > ?"
@@ -64,11 +81,13 @@ export default async function AdminPage({
       team.id,
       db
         .prepare(
-          `SELECT h.id, h.name, h.email FROM hosts h
+          `SELECT h.id, h.name, h.email, h.ics_url,
+             (SELECT MAX(a.last_sync) FROM agent_syncs a WHERE a.host_id = h.id) AS last_sync
+           FROM hosts h
            JOIN team_members m ON m.host_id = h.id
            WHERE m.team_id = ? ORDER BY h.name`
         )
-        .all(team.id) as { id: number; name: string; email: string }[]
+        .all(team.id) as MemberRow[]
     );
     eventTypesByTeam.set(
       team.id,
@@ -294,6 +313,10 @@ export default async function AdminPage({
           A team has one shared booking link that offers every slot where at least one
           member is free. Bookings go to the free member with the fewest upcoming
           meetings, and land on that member&apos;s calendar like any direct booking.
+          <span className="text-green-700"> Green</span> members have live busy sync
+          (agent check-in within {AGENT_FRESH_MINUTES} min, or an ICS feed) and take
+          bookings; <span className="text-red-600">red</span> members don&apos;t, so
+          they&apos;re skipped — the app can&apos;t see their real calendar.
         </p>
       </div>
 
@@ -397,8 +420,8 @@ export default async function AdminPage({
                 /team/{team.slug}
               </a>
               <span className="text-sm text-gray-500">
-                · {members.length} member{members.length === 1 ? "" : "s"} · {upcoming}{" "}
-                upcoming
+                · {members.length} member{members.length === 1 ? "" : "s"} (
+                {members.filter(memberLive).length} in rotation) · {upcoming} upcoming
               </span>
               <form action={adminDeleteTeam} className="ml-auto">
                 <input type="hidden" name="id" value={team.id} />
@@ -412,22 +435,36 @@ export default async function AdminPage({
             <div className="mt-3 border-t border-gray-100 pt-3">
               <h3 className="text-sm font-medium text-gray-700">Members</h3>
               <ul className="mt-2 space-y-1">
-                {members.map((m) => (
-                  <li key={m.id} className="flex items-center gap-2 text-sm">
-                    <span>{m.name}</span>
-                    <span className="text-gray-400">{m.email}</span>
-                    <form action={adminRemoveTeamMember}>
-                      <input type="hidden" name="team_id" value={team.id} />
-                      <input type="hidden" name="host_id" value={m.id} />
-                      <button
-                        className="text-gray-400 hover:text-red-600"
-                        title={`Remove ${m.name} from ${team.name}`}
-                      >
-                        ✕
-                      </button>
-                    </form>
-                  </li>
-                ))}
+                {members.map((m) => {
+                  const live = memberLive(m);
+                  return (
+                    <li key={m.id} className="flex items-center gap-2 text-sm">
+                      <span
+                        aria-hidden
+                        className={`h-2 w-2 rounded-full ${live ? "bg-green-500" : "bg-red-500"}`}
+                      />
+                      <span className={live ? "font-medium text-green-700" : "font-medium text-red-600"}>
+                        {m.name}
+                      </span>
+                      <span className="text-gray-400">{m.email}</span>
+                      {!live && (
+                        <span className="text-xs text-red-500">
+                          no busy sync — excluded from the round-robin
+                        </span>
+                      )}
+                      <form action={adminRemoveTeamMember}>
+                        <input type="hidden" name="team_id" value={team.id} />
+                        <input type="hidden" name="host_id" value={m.id} />
+                        <button
+                          className="text-gray-400 hover:text-red-600"
+                          title={`Remove ${m.name} from ${team.name}`}
+                        >
+                          ✕
+                        </button>
+                      </form>
+                    </li>
+                  );
+                })}
                 {members.length === 0 && (
                   <li className="text-sm text-amber-700">
                     No members yet — the booking page shows no availability until someone
