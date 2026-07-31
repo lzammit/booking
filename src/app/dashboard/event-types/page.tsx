@@ -115,11 +115,17 @@ export default async function EventTypesPage({
       {eventTypes.map((et) => (
         <details key={et.id} className="rounded-xl border border-gray-200 p-4">
           <summary className="cursor-pointer font-semibold">
-            {et.name}{" "}
+            <span className={et.active === 0 ? "line-through text-gray-400" : ""}>
+              {et.name}
+            </span>{" "}
             <span className="text-sm font-normal text-gray-500">
               · {et.duration_min} min · /book/{host.slug}/{et.slug}
-              {et.active === 0 && " · inactive"}
             </span>
+            {et.active === 0 && (
+              <span className="ml-2 rounded-full bg-gray-100 border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500 align-middle">
+                inactive — hidden from your booking page
+              </span>
+            )}
           </summary>
           <form action={updateEventType} className="mt-4 space-y-4">
             <input type="hidden" name="id" value={et.id} />
