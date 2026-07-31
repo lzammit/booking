@@ -254,7 +254,14 @@ export default async function AdminPage({
                 )}
               </div>
               <div className="mt-1 text-sm text-gray-500">
-                /book/{h.slug} · {h.timezone} · joined {h.created_at.slice(0, 10)}
+                <a
+                  href={`/book/${h.slug}`}
+                  target="_blank"
+                  className="text-blue-600 hover:underline"
+                >
+                  /book/{h.slug}
+                </a>{" "}
+                · {h.timezone} · joined {h.created_at.slice(0, 10)}
               </div>
               <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
                 <span>{h.event_types} active event types</span>
