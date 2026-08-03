@@ -47,8 +47,16 @@ export function memberConnected(host: Host): boolean {
   return dt.isValid && DateTime.utc().diff(dt, "minutes").minutes < AGENT_FRESH_MINUTES;
 }
 
-export function connectedMembers(teamId: number): Host[] {
-  return teamMembers(teamId).filter(memberConnected);
+/**
+ * Members who can take bookings for this team. With require_live_sync on
+ * (the default), only members with current busy data participate. With it
+ * off, everyone does — conflicts are still avoided against each member's
+ * last-synced busy blocks (external_busy persists while an agent is offline),
+ * so the residual risk is only meetings created since their last check-in.
+ */
+export function eligibleMembers(team: Team): Host[] {
+  const members = teamMembers(team.id);
+  return team.require_live_sync ? members.filter(memberConnected) : members;
 }
 
 /**
@@ -67,7 +75,7 @@ export async function computeTeamSlots(
   fromDate: string,
   toDate: string
 ): Promise<string[]> {
-  const members = connectedMembers(team.id);
+  const members = eligibleMembers(team);
   const all = await Promise.all(
     members.map((m) => computeSlots(m, asMemberEventType(tet, m), fromDate, toDate))
   );
@@ -88,7 +96,7 @@ export async function pickMemberForSlot(
   const start = DateTime.fromISO(startUtcISO, { zone: "utc" });
   if (!start.isValid) return null;
   const free: Host[] = [];
-  for (const m of connectedMembers(team.id)) {
+  for (const m of eligibleMembers(team)) {
     const day = start.setZone(m.timezone).toISODate();
     if (!day) continue;
     const slots = await computeSlots(m, asMemberEventType(tet, m), day, day);

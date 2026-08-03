@@ -598,6 +598,14 @@ export async function adminDeleteTeam(formData: FormData) {
   redirect("/dashboard/admin?saved=1");
 }
 
+export async function adminToggleTeamLiveSync(formData: FormData) {
+  await requireAdmin();
+  db.prepare("UPDATE teams SET require_live_sync = 1 - require_live_sync WHERE id = ?").run(
+    Number(formData.get("id"))
+  );
+  redirect("/dashboard/admin?saved=1");
+}
+
 export async function adminAddTeamMember(formData: FormData) {
   await requireAdmin();
   const teamId = Number(formData.get("team_id"));

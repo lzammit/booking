@@ -154,11 +154,14 @@ bookings, and agent busy blocks). At commit time the server re-checks who is
 still free and assigns the member with the fewest upcoming confirmed bookings
 (ties broken randomly).
 
-Only members with **current busy data** participate — an agent check-in within
-`AGENT_FRESH_MINUTES` (15) or a subscribed ICS feed. Without busy sync the app
-would book over meetings it can't see, so such members are excluded from both
-the slot union and the assignment (shown red in the admin Teams section, green
-when live).
+Per-team option `require_live_sync` (default on): only members with **current
+busy data** participate — an agent check-in within `AGENT_FRESH_MINUTES` (15)
+or a subscribed ICS feed — because without busy sync the app would book over
+meetings it can't see. Switched off, offline members join the rotation too;
+conflicts are still avoided against their *last-synced* busy blocks
+(`external_busy` persists), leaving only meetings created since their last
+check-in invisible. The admin Teams section shows members green (live) or red
+(offline) either way.
 
 The resulting row is a completely normal booking on that member, so emails,
 Webex, cancel/reschedule, the macOS agent, and the ICS feed need no team

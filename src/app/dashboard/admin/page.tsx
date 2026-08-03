@@ -17,9 +17,11 @@ import {
   adminToggleAdmin,
   adminToggleAdminCode,
   adminToggleTeamEventType,
+  adminToggleTeamLiveSync,
   adminUpdateTeamEventType,
 } from "@/lib/actions";
 import ConfirmSubmit from "./ConfirmSubmit";
+import AutoSubmitCheckbox from "./AutoSubmitCheckbox";
 
 interface HostRow {
   id: number;
@@ -321,9 +323,10 @@ export default async function AdminPage({
           member is free. Bookings go to the free member with the fewest upcoming
           meetings, and land on that member&apos;s calendar like any direct booking.
           <span className="text-green-700"> Green</span> members have live busy sync
-          (agent check-in within {AGENT_FRESH_MINUTES} min, or an ICS feed) and take
-          bookings; <span className="text-red-600">red</span> members don&apos;t, so
-          they&apos;re skipped — the app can&apos;t see their real calendar.
+          (agent check-in within {AGENT_FRESH_MINUTES} min, or an ICS feed);
+          <span className="text-red-600"> red</span> members don&apos;t. Each
+          team&apos;s checkbox decides whether red members are skipped, or still
+          booked using the last calendar data they synced.
         </p>
       </div>
 
@@ -428,7 +431,10 @@ export default async function AdminPage({
               </a>
               <span className="text-sm text-gray-500">
                 · {members.length} member{members.length === 1 ? "" : "s"} (
-                {members.filter(memberLive).length} in rotation) · {upcoming} upcoming
+                {team.require_live_sync
+                  ? members.filter(memberLive).length
+                  : members.length}{" "}
+                in rotation) · {upcoming} upcoming
               </span>
               <form action={adminDeleteTeam} className="ml-auto">
                 <input type="hidden" name="id" value={team.id} />
@@ -441,6 +447,13 @@ export default async function AdminPage({
 
             <div className="mt-3 border-t border-gray-100 pt-3">
               <h3 className="text-sm font-medium text-gray-700">Members</h3>
+              <form action={adminToggleTeamLiveSync} className="mt-2">
+                <input type="hidden" name="id" value={team.id} />
+                <AutoSubmitCheckbox
+                  checked={team.require_live_sync === 1}
+                  label="Only round-robin members with live busy sync — when off, offline members are booked too, using the last calendar data they synced"
+                />
+              </form>
               <ul className="mt-2 space-y-1">
                 {members.map((m) => {
                   const live = memberLive(m);
@@ -454,11 +467,16 @@ export default async function AdminPage({
                         {m.name}
                       </span>
                       <span className="text-gray-400">{m.email}</span>
-                      {!live && (
-                        <span className="text-xs text-red-500">
-                          no busy sync — excluded from the round-robin
-                        </span>
-                      )}
+                      {!live &&
+                        (team.require_live_sync ? (
+                          <span className="text-xs text-red-500">
+                            no busy sync — excluded from the round-robin
+                          </span>
+                        ) : (
+                          <span className="text-xs text-amber-600">
+                            offline — booked from last-synced calendar
+                          </span>
+                        ))}
                       <form action={adminRemoveTeamMember}>
                         <input type="hidden" name="team_id" value={team.id} />
                         <input type="hidden" name="host_id" value={m.id} />

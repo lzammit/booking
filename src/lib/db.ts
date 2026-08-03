@@ -102,6 +102,9 @@ function createDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE, -- public URL: /team/<slug>
+      -- 1 = only members with live busy sync take bookings; 0 = offline
+      -- members too, relying on their last-synced busy data for conflicts.
+      require_live_sync INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS team_members (
@@ -180,6 +183,10 @@ function createDb() {
   if (!bookingCols.some((c) => c.name === "team_id")) {
     // Set when the booking came through a team page, for the "via <team>" label.
     db.exec("ALTER TABLE bookings ADD COLUMN team_id INTEGER");
+  }
+  const teamCols = db.prepare("PRAGMA table_info(teams)").all() as { name: string }[];
+  if (!teamCols.some((c) => c.name === "require_live_sync")) {
+    db.exec("ALTER TABLE teams ADD COLUMN require_live_sync INTEGER NOT NULL DEFAULT 1");
   }
   if (!hostCols.some((c) => c.name === "ics_url")) {
     db.exec("ALTER TABLE hosts ADD COLUMN ics_url TEXT");
@@ -292,6 +299,7 @@ export interface Team {
   id: number;
   name: string;
   slug: string;
+  require_live_sync: number;
   created_at: string;
 }
 
