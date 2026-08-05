@@ -306,7 +306,14 @@ export default async function AdminPage({
         </p>
       </section>
 
-      <div className="space-y-4">
+      <details className="rounded-xl border border-gray-200">
+        <summary className="cursor-pointer select-none p-4 font-semibold hover:bg-gray-50 rounded-xl">
+          Users
+          <span className="ml-2 text-sm font-normal text-gray-500">
+            {hosts.length} account{hosts.length === 1 ? "" : "s"} · click to expand
+          </span>
+        </summary>
+        <div className="space-y-4 border-t border-gray-100 p-4">
         {hosts.map((h) => {
           const agent = agentLabel(h.last_sync);
           return (
@@ -382,7 +389,8 @@ export default async function AdminPage({
             </section>
           );
         })}
-      </div>
+        </div>
+      </details>
 
       <div className="pt-4">
         <h1 className="text-2xl font-bold">Teams</h1>
