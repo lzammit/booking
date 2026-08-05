@@ -152,6 +152,40 @@ export async function sendInviteEmail(
   }
 }
 
+/** Morning agenda: today's confirmed meetings for one host. Best effort. */
+export async function sendDailyAgendaEmail(
+  host: Host,
+  bookings: (Booking & { event_name: string; team_name: string | null })[]
+): Promise<boolean> {
+  const t = transport();
+  if (!t) return false;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  const day = DateTime.utc().setZone(host.timezone);
+  const timeOf = (iso: string) =>
+    DateTime.fromISO(iso, { zone: "utc" }).setZone(host.timezone).toFormat("h:mm a");
+  const lines = bookings.map((b) => {
+    const bits = [
+      `${timeOf(b.start_utc)}–${timeOf(b.end_utc)}`,
+      `${b.event_name} — ${b.guest_name}${b.guest_company ? ` (${b.guest_company})` : ""}`,
+    ];
+    if (b.team_name) bits.push(`via ${b.team_name}`);
+    if (b.webex_link) bits.push(`Join: ${b.webex_link}`);
+    return `• ${bits.join("  ·  ")}`;
+  });
+  try {
+    await t.sendMail({
+      from,
+      to: host.email,
+      subject: `Today: ${bookings.length} meeting${bookings.length === 1 ? "" : "s"} — ${day.toFormat("ccc, LLL d")}`,
+      text: `Good morning ${host.name.split(" ")[0]},\n\nYour bookings today (${day.toFormat("cccc, LLLL d")}, ${host.timezone}):\n\n${lines.join("\n")}\n\nDashboard: ${APP_URL}/dashboard\n`,
+    });
+    return true;
+  } catch (err) {
+    console.error("Daily agenda email failed:", err);
+    return false;
+  }
+}
+
 export async function sendBookingEmails(
   booking: Booking,
   host: Host,
