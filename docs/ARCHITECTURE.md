@@ -163,6 +163,17 @@ conflicts are still avoided against their *last-synced* busy blocks
 check-in invisible. The admin Teams section shows members green (live) or red
 (offline) either way.
 
+**Team daily digest (email / Slack).** Each team can set a digest email
+address and/or a Slack *incoming webhook* URL (admin UI). An hourly cron hits
+`/api/cron/daily-digest` (authenticated with a server-side bearer secret); at
+07:00 in the team's digest timezone the app POSTs one message summarizing the
+members' bookings for the day — meeting time, meeting type, host, guest name
+and company. Data flow is strictly one-way, app → Slack: the webhook is
+write-only to the single channel chosen at install time, the app requests no
+other Slack scopes, reads nothing from Slack, and posts as itself (never as an
+employee). No guest email addresses or booking notes are included in the
+digest. The webhook URL is stored server-side and treated as a secret.
+
 The resulting row is a completely normal booking on that member, so emails,
 Webex, cancel/reschedule, the macOS agent, and the ICS feed need no team
 awareness. The one wrinkle: `bookings.event_type_id` must reference a real
