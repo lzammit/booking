@@ -28,6 +28,7 @@ import { createWebexMeeting, deleteWebexMeeting, webexDisconnect } from "./webex
 import { cleanText, clientIp, rateLimit } from "./ratelimit";
 import { shadowEventTypeFor } from "./teams";
 import { isSlotFree } from "./slots";
+import { runCombinedDigest } from "./digest";
 import type { TeamEventType } from "./db";
 
 /** Constant-time string comparison (via digests, so lengths may differ). */
@@ -660,6 +661,31 @@ export async function adminSetSignupCode(formData: FormData) {
   }
   setSetting("signup_code", code);
   redirect("/dashboard/admin?saved=1");
+}
+
+// ----- Daily digest settings (org-wide morning summary) -----
+
+export async function adminSaveDigestSettings(formData: FormData) {
+  const admin = await requireAdmin();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const webhook = String(formData.get("webhook") || "").trim();
+  if (email && !z.string().email().max(200).safeParse(email).success) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("Enter a valid digest email (or leave it empty)"));
+  }
+  if (webhook && (!/^https:\/\/\S+$/.test(webhook) || webhook.length > 500)) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("The Slack webhook must be an https:// URL"));
+  }
+  setSetting("digest_email", email);
+  setSetting("digest_slack_webhook", webhook);
+  // The 07:00 send time follows the timezone of the admin who saved this.
+  setSetting("digest_tz", admin.timezone);
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminSendDigestNow() {
+  await requireAdmin();
+  const result = await runCombinedDigest(true);
+  redirect("/dashboard/admin?digest=" + encodeURIComponent(result));
 }
 
 // ----- Teams (admin-managed groups with a shared round-robin booking URL) -----

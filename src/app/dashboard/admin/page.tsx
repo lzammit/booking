@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import db, { adminCode, adminCodeEnabled, signupCode, Team, TeamEventType } from "@/lib/db";
+import db, { adminCode, adminCodeEnabled, getSetting, signupCode, Team, TeamEventType } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { AGENT_FRESH_MINUTES } from "@/lib/teams";
 import {
@@ -12,6 +12,8 @@ import {
   adminInviteUser,
   adminRemoveTeamMember,
   adminResetPassword,
+  adminSaveDigestSettings,
+  adminSendDigestNow,
   adminSetAdminCode,
   adminSetSignupCode,
   adminToggleAdmin,
@@ -40,9 +42,9 @@ interface HostRow {
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; invited?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; invited?: string; digest?: string }>;
 }) {
-  const { error, saved, invited } = await searchParams;
+  const { error, saved, invited, digest } = await searchParams;
   const admin = await requireAdmin();
   const nowIso = DateTime.utc().toISO();
   const hosts = db
@@ -135,6 +137,17 @@ export default async function AdminPage({
       {invited && (
         <p className="rounded-md bg-green-50 border border-green-200 text-green-700 px-3 py-2 text-sm">
           Invitation sent to {invited}.
+        </p>
+      )}
+      {digest && (
+        <p
+          className={`rounded-md border px-3 py-2 text-sm ${
+            digest.includes("FAILED")
+              ? "bg-red-50 border-red-200 text-red-700"
+              : "bg-green-50 border-green-200 text-green-700"
+          }`}
+        >
+          Digest test: {digest}.
         </p>
       )}
 
@@ -241,6 +254,56 @@ export default async function AdminPage({
             </code>
           </p>
         )}
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Daily digest</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Every member already gets their own agenda email at 7:00 AM their time.
+          Optionally, also send one combined digest of <em>everyone&apos;s</em> bookings
+          for the day — to a specific email address, a Slack channel, or both — at
+          7:00 AM {getSetting("digest_tz") || "your timezone"} (days with no bookings
+          send nothing).
+        </p>
+        <form action={adminSaveDigestSettings} className="mt-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="w-40 text-sm text-gray-600">Digest email</label>
+            <input
+              name="email"
+              type="email"
+              defaultValue={getSetting("digest_email") ?? ""}
+              placeholder="pse-team@example.com (empty = off)"
+              className="w-80 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="w-40 text-sm text-gray-600">Slack webhook URL</label>
+            <input
+              name="webhook"
+              defaultValue={getSetting("digest_slack_webhook") ?? ""}
+              placeholder="https://hooks.slack.com/services/… (empty = off)"
+              className="w-80 rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+              Save
+            </button>
+            <button
+              formAction={adminSendDigestNow}
+              className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm hover:bg-gray-50"
+              title="Sends today's digest immediately to the saved destinations (save first)"
+            >
+              Send now (test)
+            </button>
+          </div>
+        </form>
+        <p className="mt-2 text-xs text-gray-400">
+          Slack: create an incoming webhook for your channel (Slack → Apps → Incoming
+          Webhooks, or api.slack.com/apps → your app → Incoming Webhooks) and paste the
+          URL here. Treat the URL as a secret — anyone holding it can post to the
+          channel.
+        </p>
       </section>
 
       <div className="space-y-4">

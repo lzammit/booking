@@ -3,6 +3,7 @@ import { DateTime } from "luxon";
 import { NextRequest, NextResponse } from "next/server";
 import db, { Booking, getSetting, Host, setSetting } from "@/lib/db";
 import { sendDailyAgendaEmail } from "@/lib/email";
+import { runCombinedDigest } from "@/lib/digest";
 
 /**
  * Morning agenda digests. Meant to be hit hourly by cron (Bearer CRON_SECRET):
@@ -66,5 +67,9 @@ export async function GET(req: NextRequest) {
       sent++;
     }
   }
-  return NextResponse.json({ ok: true, sent, skipped });
+  // Org-wide digest to the admin-configured email/Slack channel. Skipped in
+  // single-host debug runs so ?host= tests never spam the shared channel.
+  const combined = onlyHost ? "skipped (host filter)" : await runCombinedDigest(force);
+
+  return NextResponse.json({ ok: true, sent, skipped, combined });
 }

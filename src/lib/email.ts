@@ -186,6 +186,36 @@ export async function sendDailyAgendaEmail(
   }
 }
 
+/** Org-wide digest: everyone's meetings today, to one chosen address. */
+export async function sendCombinedDigestEmail(
+  to: string,
+  tz: string,
+  bookings: (Booking & { event_name: string; team_name: string | null; host_name: string })[]
+): Promise<boolean> {
+  const t = transport();
+  if (!t) return false;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  const day = DateTime.utc().setZone(tz);
+  const timeOf = (iso: string) =>
+    DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).toFormat("h:mm a");
+  const lines = bookings.map(
+    (b) =>
+      `• ${timeOf(b.start_utc)}–${timeOf(b.end_utc)}  ${b.host_name}: ${b.event_name} — ${b.guest_name}${b.guest_company ? ` (${b.guest_company})` : ""}${b.team_name ? ` · via ${b.team_name}` : ""}`
+  );
+  try {
+    await t.sendMail({
+      from,
+      to,
+      subject: `Bookings today: ${bookings.length} — ${day.toFormat("ccc, LLL d")}`,
+      text: `All bookings for ${day.toFormat("cccc, LLLL d")} (${tz}):\n\n${lines.join("\n")}\n\nDashboard: ${APP_URL}/dashboard\n`,
+    });
+    return true;
+  } catch (err) {
+    console.error("Combined digest email failed:", err);
+    return false;
+  }
+}
+
 export async function sendBookingEmails(
   booking: Booking,
   host: Host,
