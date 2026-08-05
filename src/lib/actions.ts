@@ -28,7 +28,7 @@ import { createWebexMeeting, deleteWebexMeeting, webexDisconnect } from "./webex
 import { cleanText, clientIp, rateLimit } from "./ratelimit";
 import { shadowEventTypeFor } from "./teams";
 import { isSlotFree } from "./slots";
-import { runCombinedDigest } from "./digest";
+import { runTeamDigests } from "./digest";
 import type { TeamEventType } from "./db";
 
 /** Constant-time string comparison (via digests, so lengths may differ). */
@@ -663,10 +663,11 @@ export async function adminSetSignupCode(formData: FormData) {
   redirect("/dashboard/admin?saved=1");
 }
 
-// ----- Daily digest settings (org-wide morning summary) -----
+// ----- Per-team daily digest (morning summary to email and/or Slack) -----
 
-export async function adminSaveDigestSettings(formData: FormData) {
+export async function adminSaveTeamDigest(formData: FormData) {
   const admin = await requireAdmin();
+  const teamId = Number(formData.get("team_id"));
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const webhook = String(formData.get("webhook") || "").trim();
   if (email && !z.string().email().max(200).safeParse(email).success) {
@@ -675,17 +676,20 @@ export async function adminSaveDigestSettings(formData: FormData) {
   if (webhook && (!/^https:\/\/\S+$/.test(webhook) || webhook.length > 500)) {
     redirect("/dashboard/admin?error=" + encodeURIComponent("The Slack webhook must be an https:// URL"));
   }
-  setSetting("digest_email", email);
-  setSetting("digest_slack_webhook", webhook);
   // The 07:00 send time follows the timezone of the admin who saved this.
-  setSetting("digest_tz", admin.timezone);
+  db.prepare(
+    "UPDATE teams SET digest_email = ?, digest_slack_webhook = ?, digest_tz = ? WHERE id = ?"
+  ).run(email, webhook, admin.timezone, teamId);
   redirect("/dashboard/admin?saved=1");
 }
 
-export async function adminSendDigestNow() {
+export async function adminSendTeamDigestNow(formData: FormData) {
   await requireAdmin();
-  const result = await runCombinedDigest(true);
-  redirect("/dashboard/admin?digest=" + encodeURIComponent(result));
+  const teamId = Number(formData.get("team_id"));
+  const results = await runTeamDigests(true, teamId);
+  redirect(
+    "/dashboard/admin?digest=" + encodeURIComponent(results.join("; ") || "nothing to send")
+  );
 }
 
 // ----- Teams (admin-managed groups with a shared round-robin booking URL) -----

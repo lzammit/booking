@@ -186,10 +186,11 @@ export async function sendDailyAgendaEmail(
   }
 }
 
-/** Org-wide digest: everyone's meetings today, to one chosen address. */
-export async function sendCombinedDigestEmail(
+/** Team digest: the team members' meetings today, to one chosen address. */
+export async function sendTeamDigestEmail(
   to: string,
   tz: string,
+  teamName: string,
   bookings: (Booking & { event_name: string; team_name: string | null; host_name: string })[]
 ): Promise<boolean> {
   const t = transport();
@@ -206,12 +207,12 @@ export async function sendCombinedDigestEmail(
     await t.sendMail({
       from,
       to,
-      subject: `Bookings today: ${bookings.length} — ${day.toFormat("ccc, LLL d")}`,
-      text: `All bookings for ${day.toFormat("cccc, LLLL d")} (${tz}):\n\n${lines.join("\n")}\n\nDashboard: ${APP_URL}/dashboard\n`,
+      subject: `${teamName} — bookings today: ${bookings.length} — ${day.toFormat("ccc, LLL d")}`,
+      text: `${teamName} bookings for ${day.toFormat("cccc, LLLL d")} (${tz}):\n\n${lines.join("\n")}\n\nDashboard: ${APP_URL}/dashboard\n`,
     });
     return true;
   } catch (err) {
-    console.error("Combined digest email failed:", err);
+    console.error("Team digest email failed:", err);
     return false;
   }
 }

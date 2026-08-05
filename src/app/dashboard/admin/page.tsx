@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import db, { adminCode, adminCodeEnabled, getSetting, signupCode, Team, TeamEventType } from "@/lib/db";
+import db, { adminCode, adminCodeEnabled, signupCode, Team, TeamEventType } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { AGENT_FRESH_MINUTES } from "@/lib/teams";
 import {
@@ -12,8 +12,8 @@ import {
   adminInviteUser,
   adminRemoveTeamMember,
   adminResetPassword,
-  adminSaveDigestSettings,
-  adminSendDigestNow,
+  adminSaveTeamDigest,
+  adminSendTeamDigestNow,
   adminSetAdminCode,
   adminSetSignupCode,
   adminToggleAdmin,
@@ -114,7 +114,7 @@ export default async function AdminPage({
     <main className="space-y-6">
       <div className="flex items-baseline justify-between">
         <div>
-        <h1 className="text-2xl font-bold">Users</h1>
+        <h1 className="text-2xl font-bold">Admin</h1>
         <p className="text-sm text-gray-500">
           {hosts.length} account{hosts.length === 1 ? "" : "s"} · deleting a user removes
           all their event types, bookings, and calendar data.
@@ -150,6 +150,15 @@ export default async function AdminPage({
           Digest test: {digest}.
         </p>
       )}
+
+      <details className="rounded-xl border border-gray-200">
+        <summary className="cursor-pointer select-none rounded-xl p-4 font-semibold hover:bg-gray-50">
+          Users &amp; invitations
+          <span className="ml-2 text-sm font-normal text-gray-500">
+            {hosts.length} account{hosts.length === 1 ? "" : "s"} · click to expand
+          </span>
+        </summary>
+        <div className="space-y-4 border-t border-gray-100 p-4">
 
       <section className="rounded-xl border border-gray-200 p-4">
         <h2 className="font-semibold">Invite a user</h2>
@@ -256,64 +265,6 @@ export default async function AdminPage({
         )}
       </section>
 
-      <section className="rounded-xl border border-gray-200 p-4">
-        <h2 className="font-semibold">Daily digest</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Every member already gets their own agenda email at 7:00 AM their time.
-          Optionally, also send one combined digest of <em>everyone&apos;s</em> bookings
-          for the day — to a specific email address, a Slack channel, or both — at
-          7:00 AM {getSetting("digest_tz") || "your timezone"} (days with no bookings
-          send nothing).
-        </p>
-        <form action={adminSaveDigestSettings} className="mt-3 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="w-40 text-sm text-gray-600">Digest email</label>
-            <input
-              name="email"
-              type="email"
-              defaultValue={getSetting("digest_email") ?? ""}
-              placeholder="pse-team@example.com (empty = off)"
-              className="w-80 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="w-40 text-sm text-gray-600">Slack webhook URL</label>
-            <input
-              name="webhook"
-              defaultValue={getSetting("digest_slack_webhook") ?? ""}
-              placeholder="https://hooks.slack.com/services/… (empty = off)"
-              className="w-80 rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-xs"
-            />
-          </div>
-          <div className="flex items-center gap-2 pt-1">
-            <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
-              Save
-            </button>
-            <button
-              formAction={adminSendDigestNow}
-              className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm hover:bg-gray-50"
-              title="Sends today's digest immediately to the saved destinations (save first)"
-            >
-              Send now (test)
-            </button>
-          </div>
-        </form>
-        <p className="mt-2 text-xs text-gray-400">
-          Slack: create an incoming webhook for your channel (Slack → Apps → Incoming
-          Webhooks, or api.slack.com/apps → your app → Incoming Webhooks) and paste the
-          URL here. Treat the URL as a secret — anyone holding it can post to the
-          channel.
-        </p>
-      </section>
-
-      <details className="rounded-xl border border-gray-200">
-        <summary className="cursor-pointer select-none p-4 font-semibold hover:bg-gray-50 rounded-xl">
-          Users
-          <span className="ml-2 text-sm font-normal text-gray-500">
-            {hosts.length} account{hosts.length === 1 ? "" : "s"} · click to expand
-          </span>
-        </summary>
-        <div className="space-y-4 border-t border-gray-100 p-4">
         {hosts.map((h) => {
           const agent = agentLabel(h.last_sync);
           return (
@@ -661,6 +612,51 @@ export default async function AdminPage({
                   </button>
                 </form>
               </details>
+            </div>
+
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <h3 className="text-sm font-medium text-gray-700">Daily digest</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                At 7:00 AM{team.digest_tz ? ` (${team.digest_tz})` : ""}, this team&apos;s
+                bookings for the day go to these destinations. Empty = off; days with
+                no bookings send nothing. Members still get their personal 7 AM agenda
+                email either way.
+              </p>
+              <form
+                action={adminSaveTeamDigest}
+                className="mt-2 flex flex-wrap items-center gap-2"
+              >
+                <input type="hidden" name="team_id" value={team.id} />
+                <input
+                  name="email"
+                  type="email"
+                  defaultValue={team.digest_email}
+                  placeholder="Digest email (optional)"
+                  className="w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                />
+                <input
+                  name="webhook"
+                  defaultValue={team.digest_slack_webhook}
+                  placeholder="https://hooks.slack.com/services/… (optional)"
+                  className="w-80 rounded-lg border border-gray-300 px-3 py-1.5 font-mono text-xs"
+                />
+                <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+                  Save
+                </button>
+                <button
+                  formAction={adminSendTeamDigestNow}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+                  title="Sends this team's digest immediately to the saved destinations (save first)"
+                >
+                  Send now (test)
+                </button>
+              </form>
+              <p className="mt-1 text-xs text-gray-400">
+                Slack: the webhook URL isn&apos;t on the channel itself — create one at
+                api.slack.com/apps → your app → Incoming Webhooks → &quot;Add New Webhook
+                to Workspace&quot;, pick the channel, and Slack generates the URL. Treat
+                it as a secret: anyone holding it can post to that channel.
+              </p>
             </div>
           </section>
         );

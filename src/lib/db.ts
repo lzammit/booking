@@ -105,6 +105,11 @@ function createDb() {
       -- 1 = only members with live busy sync take bookings; 0 = offline
       -- members too, relying on their last-synced busy data for conflicts.
       require_live_sync INTEGER NOT NULL DEFAULT 1,
+      -- Morning digest of members' bookings: optional email and/or Slack
+      -- incoming-webhook destination, sent at 07:00 in digest_tz.
+      digest_email TEXT NOT NULL DEFAULT '',
+      digest_slack_webhook TEXT NOT NULL DEFAULT '',
+      digest_tz TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS team_members (
@@ -188,6 +193,11 @@ function createDb() {
   const teamCols = db.prepare("PRAGMA table_info(teams)").all() as { name: string }[];
   if (!teamCols.some((c) => c.name === "require_live_sync")) {
     db.exec("ALTER TABLE teams ADD COLUMN require_live_sync INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!teamCols.some((c) => c.name === "digest_email")) {
+    db.exec("ALTER TABLE teams ADD COLUMN digest_email TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE teams ADD COLUMN digest_slack_webhook TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE teams ADD COLUMN digest_tz TEXT NOT NULL DEFAULT ''");
   }
   // Booking questions, asked on the public form (one per line).
   if (!etCols.some((c) => c.name === "questions")) {
@@ -319,6 +329,9 @@ export interface Team {
   name: string;
   slug: string;
   require_live_sync: number;
+  digest_email: string;
+  digest_slack_webhook: string;
+  digest_tz: string;
   created_at: string;
 }
 
