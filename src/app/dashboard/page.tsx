@@ -1,7 +1,12 @@
 import { DateTime } from "luxon";
 import db, { Booking, EventType } from "@/lib/db";
 import { requireHost } from "@/lib/session";
-import { cancelBookingAsHost, deletePastBooking, updateSlug } from "@/lib/actions";
+import {
+  cancelBookingAsHost,
+  deletePastBooking,
+  reassignTeamBooking,
+  updateSlug,
+} from "@/lib/actions";
 import ConfirmSubmit from "./admin/ConfirmSubmit";
 
 export default async function DashboardPage({
@@ -34,6 +39,22 @@ export default async function DashboardPage({
   const eventTypeCount = (
     db.prepare("SELECT COUNT(*) AS c FROM event_types WHERE host_id = ? AND active = 1").get(host.id) as { c: number }
   ).c;
+
+  // Hand-off targets: other members of each team this host has bookings for.
+  const teamIds = [...new Set(upcoming.map((b) => b.team_id).filter(Boolean))] as number[];
+  const teammates = new Map<number, { id: number; name: string }[]>();
+  for (const tid of teamIds) {
+    teammates.set(
+      tid,
+      db
+        .prepare(
+          `SELECT h.id, h.name FROM hosts h
+           JOIN team_members m ON m.host_id = h.id
+           WHERE m.team_id = ? AND h.id != ? ORDER BY h.name`
+        )
+        .all(tid, host.id) as { id: number; name: string }[]
+    );
+  }
 
   const fmt = (iso: string) =>
     DateTime.fromISO(iso, { zone: "utc" })
@@ -120,6 +141,27 @@ export default async function DashboardPage({
                     {b.notes && <> · “{b.notes}”</>}
                   </div>
                 </div>
+                {b.team_id && (teammates.get(b.team_id)?.length ?? 0) > 0 && (
+                  <form action={reassignTeamBooking} className="flex items-center gap-1.5">
+                    <input type="hidden" name="id" value={b.id} />
+                    <select
+                      name="target_id"
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                    >
+                      {teammates.get(b.team_id)!.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="text-sm text-blue-600 hover:underline"
+                      title="Hand this booking off — the guest gets an updated invite from the new host"
+                    >
+                      Reassign
+                    </button>
+                  </form>
+                )}
                 <a
                   href={`/reschedule/${b.cancel_token}`}
                   className="text-sm text-blue-600 hover:underline"

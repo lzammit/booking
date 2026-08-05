@@ -24,8 +24,11 @@ import {
 } from "./email";
 import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
 import { deleteOutlookEvent, msDisconnect } from "./msgraph";
-import { deleteWebexMeeting, webexDisconnect } from "./webex";
+import { createWebexMeeting, deleteWebexMeeting, webexDisconnect } from "./webex";
 import { cleanText, clientIp, rateLimit } from "./ratelimit";
+import { shadowEventTypeFor } from "./teams";
+import { isSlotFree } from "./slots";
+import type { TeamEventType } from "./db";
 
 /** Constant-time string comparison (via digests, so lengths may differ). */
 function safeEqual(a: string, b: string): boolean {
@@ -428,6 +431,84 @@ export async function cancelBookingAsHost(formData: FormData) {
   }
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+/**
+ * Hand a team booking off to another member of the same team. The booking
+ * keeps its id (so the iCalendar UID is stable); a bumped SEQUENCE plus a
+ * fresh invite from the new host makes the guest's calendar update in place.
+ * Old and new hosts' agents/feeds reconcile on their next sync.
+ */
+export async function reassignTeamBooking(formData: FormData) {
+  const host = await requireHost();
+  const id = Number(formData.get("id"));
+  const targetId = Number(formData.get("target_id"));
+  const fail = (msg: string) => redirect("/dashboard?error=" + encodeURIComponent(msg));
+
+  const booking = db
+    .prepare(
+      "SELECT * FROM bookings WHERE id = ? AND host_id = ? AND status = 'confirmed' AND team_id IS NOT NULL AND end_utc > ?"
+    )
+    .get(id, host.id, new Date().toISOString()) as Booking | undefined;
+  if (!booking) fail("Booking not found or not reassignable");
+
+  const isMember = db
+    .prepare("SELECT 1 FROM team_members WHERE team_id = ? AND host_id = ?")
+    .get(booking!.team_id, targetId);
+  const target = db.prepare("SELECT * FROM hosts WHERE id = ?").get(targetId) as
+    | Host
+    | undefined;
+  if (!isMember || !target || target.id === host.id) fail("Pick another team member");
+
+  // The team event type, reached through the booking's shadow copy.
+  const currentEt = db
+    .prepare("SELECT * FROM event_types WHERE id = ?")
+    .get(booking!.event_type_id) as EventType;
+  const tet = db
+    .prepare("SELECT * FROM team_event_types WHERE id = ?")
+    .get(currentEt.team_event_type_id) as TeamEventType | undefined;
+  if (!tet) fail("The team meeting type no longer exists");
+
+  const shadow = shadowEventTypeFor(target!, tet!);
+  // Availability check only — a hand-off must work on short notice and beyond
+  // the public booking window, so those two constraints are lifted.
+  const checkEt = { ...shadow, min_notice_min: 0, window_days: 365 };
+  if (!(await isSlotFree(target!, checkEt, booking!.start_utc))) {
+    fail(`${target!.name} is not free at that time`);
+  }
+
+  db.prepare(
+    "UPDATE bookings SET host_id = ?, event_type_id = ?, sequence = sequence + 1 WHERE id = ?"
+  ).run(target!.id, shadow.id, booking!.id);
+
+  // Meeting-link bookkeeping, all best-effort. A dynamic Webex meeting hangs
+  // off the old host's account, so it's recreated under the new host.
+  if (booking!.webex_meeting_id) {
+    await deleteWebexMeeting(host.id, booking!.webex_meeting_id);
+    const webex = await createWebexMeeting({
+      hostId: target!.id,
+      title: `${tet!.name} — ${target!.name} / ${booking!.guest_name}`,
+      agenda: `${booking!.notes ? booking!.notes + "\n\n" : ""}Guest: ${booking!.guest_name} (${booking!.guest_company}) <${booking!.guest_email}>`,
+      startUtc: booking!.start_utc,
+      endUtc: booking!.end_utc,
+      guestEmail: booking!.guest_email,
+    });
+    db.prepare("UPDATE bookings SET webex_link = ?, webex_meeting_id = ? WHERE id = ?").run(
+      webex?.link ?? tet!.meeting_url ?? null,
+      webex?.meetingId ?? null,
+      booking!.id
+    );
+  }
+  if (booking!.ms_event_id) {
+    await deleteOutlookEvent(host.id, booking!.ms_event_id);
+    db.prepare("UPDATE bookings SET ms_event_id = NULL WHERE id = ?").run(booking!.id);
+  }
+
+  const fresh = db.prepare("SELECT * FROM bookings WHERE id = ?").get(booking!.id) as Booking;
+  await sendBookingEmails(fresh, target!, shadow, "confirmed");
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard?saved=1");
 }
 
 export async function deletePastBooking(formData: FormData) {
