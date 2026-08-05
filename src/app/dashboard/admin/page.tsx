@@ -456,6 +456,14 @@ export default async function AdminPage({
                 />
               </form>
             </div>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-800">
+                Embed snippet — put the booking page inside any website
+              </summary>
+              <code className="mt-1 block break-all whitespace-pre-wrap rounded-md border border-gray-200 bg-gray-50 p-2 text-xs select-all">
+                {`<iframe src="${process.env.APP_URL}/team/${team.slug}" style="width:100%;min-height:720px;border:0" title="Book time with ${team.name}"></iframe>`}
+              </code>
+            </details>
 
             <div className="mt-3 border-t border-gray-100 pt-3">
               <h3 className="text-sm font-medium text-gray-700">Members</h3>

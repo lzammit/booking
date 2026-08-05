@@ -292,6 +292,18 @@ export default async function SettingsPage({
       </section>
 
       <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Embed on a website</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Paste this into any web page (support portal, docs, personal site) and
+          visitors book without leaving it. Works for team pages too — swap in the
+          team URL.
+        </p>
+        <code className="block mt-2 text-xs bg-gray-50 border border-gray-200 rounded-md p-2 break-all select-all whitespace-pre-wrap">
+          {`<iframe src="${process.env.APP_URL}/book/${host.slug}" style="width:100%;min-height:720px;border:0" title="Book time with ${host.name}"></iframe>`}
+        </code>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold">Local calendar agent</h2>
           {agents.length > 0 &&
