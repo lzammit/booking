@@ -110,12 +110,17 @@ export default async function AdminPage({
 
   return (
     <main className="space-y-6">
-      <div>
+      <div className="flex items-baseline justify-between">
+        <div>
         <h1 className="text-2xl font-bold">Users</h1>
         <p className="text-sm text-gray-500">
           {hosts.length} account{hosts.length === 1 ? "" : "s"} · deleting a user removes
           all their event types, bookings, and calendar data.
         </p>
+        </div>
+        <a href="/dashboard/admin/stats" className="text-sm text-blue-600 hover:underline">
+          Stats →
+        </a>
       </div>
       {error && (
         <p className="rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
