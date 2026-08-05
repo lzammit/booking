@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { DateTime } from "luxon";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import db, { Booking, EventType, Host, Team, TeamEventType } from "@/lib/db";
+import db, { Booking, EventType, Host, questionList, Team, TeamEventType } from "@/lib/db";
 import { isSlotFree } from "@/lib/slots";
 import { pickMemberForSlot, shadowEventTypeFor } from "@/lib/teams";
 import { sendBookingEmails } from "@/lib/email";
@@ -19,6 +19,8 @@ const bookSchema = z.object({
   company: z.string().min(1).max(120).transform(cleanText).refine((s) => s.length > 0),
   email: z.string().email().max(200),
   notes: z.string().max(2000).transform(cleanText).default(""),
+  // Answers to the event type's booking questions, aligned by index.
+  answers: z.array(z.string().max(1000).transform(cleanText)).max(10).default([]),
   timezone: z.string().max(60).default("UTC"),
   locale: z.enum(["en", "fr"]).default("en"),
 });
@@ -101,6 +103,15 @@ export async function POST(req: NextRequest) {
     tzOk = "UTC";
   }
 
+  // Fold question answers into the notes, so they flow everywhere notes go
+  // (emails, calendar invites, agent events, dashboard) with no extra plumbing.
+  const questions = questionList(eventType.questions);
+  const qa = questions
+    .map((q, i) => (input.answers[i] ? `${q} → ${input.answers[i]}` : null))
+    .filter(Boolean)
+    .join("\n");
+  const notes = qa ? (input.notes ? `${qa}\n\n${input.notes}` : qa) : input.notes;
+
   const cancelToken = randomBytes(24).toString("hex");
   const res = db
     .prepare(
@@ -116,7 +127,7 @@ export async function POST(req: NextRequest) {
       input.company,
       tzOk,
       input.locale,
-      input.notes,
+      notes,
       startIso,
       endIso,
       cancelToken
@@ -130,7 +141,7 @@ export async function POST(req: NextRequest) {
   const webex = await createWebexMeeting({
     hostId: host.id,
     title: `${eventType.name} — ${host.name} / ${input.name}`,
-    agenda: `${input.notes ? input.notes + "\n\n" : ""}Guest: ${input.name} (${input.company}) <${input.email}>`,
+    agenda: `${notes ? notes + "\n\n" : ""}Guest: ${input.name} (${input.company}) <${input.email}>`,
     startUtc: startIso,
     endUtc: endIso,
     guestEmail: input.email,
@@ -153,7 +164,7 @@ export async function POST(req: NextRequest) {
   const msEventId = await createOutlookEvent({
     hostId: host.id,
     subject: `${input.company} - ${input.name}`,
-    body: `${input.notes ? input.notes + "\n\n" : ""}${booking.webex_link ? `Join Webex: ${booking.webex_link}\n\n` : ""}Booked via ${process.env.APP_URL || "booking app"}. Guest: ${input.name} (${input.company}) <${input.email}>`,
+    body: `${notes ? notes + "\n\n" : ""}${booking.webex_link ? `Join Webex: ${booking.webex_link}\n\n` : ""}Booked via ${process.env.APP_URL || "booking app"}. Guest: ${input.name} (${input.company}) <${input.email}>`,
     startUtc: startIso,
     endUtc: endIso,
     guestName: input.name,

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import db, { TeamEventType } from "@/lib/db";
+import db, { questionList, TeamEventType } from "@/lib/db";
 import { teamBySlug, teamMembers } from "@/lib/teams";
 import { pickLocale, t } from "@/lib/i18n";
 import BookingWidget from "@/app/book/[slug]/[eventSlug]/BookingWidget";
@@ -59,6 +59,7 @@ export default async function TeamEventBookingPage({
           hostName={team.name}
           hostTimezone={teamTz}
           locale={locale}
+          questions={questionList(eventType.questions)}
         />
       </div>
     </main>

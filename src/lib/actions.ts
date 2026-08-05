@@ -362,6 +362,19 @@ const eventTypeSchema = z.object({
     .max(500)
     .refine((v) => v === "" || /^https?:\/\//.test(v), "Must be a URL")
     .default(""),
+  // One booking question per line; shown on the public form.
+  questions: z
+    .string()
+    .max(2000)
+    .default("")
+    .transform((s) =>
+      s
+        .split("\n")
+        .map((q) => cleanText(q))
+        .filter(Boolean)
+        .slice(0, 10)
+        .join("\n")
+    ),
 });
 
 export async function createEventType(formData: FormData) {
@@ -377,9 +390,9 @@ export async function createEventType(formData: FormData) {
   const base = slug;
   while (taken.get(host.id, slug)) slug = `${base}-${n++}`;
   db.prepare(
-    `INSERT INTO event_types (host_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days, meeting_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(host.id, d.name, slug, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url);
+    `INSERT INTO event_types (host_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days, meeting_url, questions)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(host.id, d.name, slug, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url, d.questions);
   redirect("/dashboard/event-types");
 }
 
@@ -392,9 +405,9 @@ export async function updateEventType(formData: FormData) {
   // Note: active is NOT touched here — it's a separate, explicit toggle so
   // editing fields can never silently hide an event from the booking page.
   db.prepare(
-    `UPDATE event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, meeting_url=?
+    `UPDATE event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, meeting_url=?, questions=?
      WHERE id = ? AND host_id = ?`
-  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url, id, host.id);
+  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url, d.questions, id, host.id);
   redirect("/dashboard/event-types");
 }
 
@@ -723,9 +736,9 @@ export async function adminCreateTeamEventType(formData: FormData) {
   let n = 2;
   while (taken.get(teamId, slug)) slug = `${base}-${n++}`;
   db.prepare(
-    `INSERT INTO team_event_types (team_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days, meeting_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(teamId, d.name, slug, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url);
+    `INSERT INTO team_event_types (team_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days, meeting_url, questions)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(teamId, d.name, slug, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url, d.questions);
   redirect("/dashboard/admin?saved=1");
 }
 
@@ -738,9 +751,9 @@ export async function adminUpdateTeamEventType(formData: FormData) {
   }
   const d = parsed.data;
   db.prepare(
-    `UPDATE team_event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, meeting_url=?
+    `UPDATE team_event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, meeting_url=?, questions=?
      WHERE id = ?`
-  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url, id);
+  ).run(d.name, d.description, d.duration_min, d.buffer_min, d.min_notice_min, d.window_days, d.meeting_url, d.questions, id);
   // Members' shadow copies re-sync on the next booking (shadowEventTypeFor).
   redirect("/dashboard/admin?saved=1");
 }

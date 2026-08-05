@@ -22,6 +22,8 @@ interface Props {
   hostName: string;
   hostTimezone: string;
   locale: Locale;
+  /** Questions asked on the details form; answers ride along with the booking. */
+  questions?: string[];
   /** When set, the widget moves an existing booking instead of creating one. */
   rescheduleToken?: string;
 }
@@ -73,6 +75,7 @@ export default function BookingWidget({
   hostName,
   hostTimezone,
   locale,
+  questions = [],
   rescheduleToken,
 }: Props) {
   const browserTz = useMemo(
@@ -199,6 +202,7 @@ export default function BookingWidget({
                 company: fd.get("company"),
                 email: fd.get("email"),
                 notes: fd.get("notes") || "",
+                answers: questions.map((_, i) => String(fd.get(`answer_${i}`) || "")),
                 timezone: tz,
                 locale,
               }
@@ -475,6 +479,17 @@ export default function BookingWidget({
                   placeholder={t(locale, "yourEmail")}
                   className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
                 />
+                {questions.map((q, i) => (
+                  <label key={i} className="block text-sm text-ink/70">
+                    {q}
+                    <input
+                      name={`answer_${i}`}
+                      required
+                      maxLength={500}
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
+                    />
+                  </label>
+                ))}
                 <textarea
                   name="notes"
                   rows={3}

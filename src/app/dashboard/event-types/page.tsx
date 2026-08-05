@@ -86,6 +86,20 @@ function Fields({ et }: { et?: EventType }) {
           every booking’s calendar invite and emails as the join link.
         </span>
       </label>
+      <label className="col-span-2 text-sm">
+        Booking questions (optional, one per line)
+        <textarea
+          name="questions"
+          defaultValue={et?.questions}
+          rows={3}
+          placeholder={"PacketFence version?\nDeployment size?"}
+          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+        />
+        <span className="mt-1 block text-xs text-gray-400">
+          Asked on the booking form (required answers). They arrive with the
+          booking — in your email, the calendar invite, and the dashboard.
+        </span>
+      </label>
     </div>
   );
 }

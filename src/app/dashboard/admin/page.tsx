@@ -416,6 +416,13 @@ export default async function AdminPage({
               placeholder="Static meeting link, e.g. Webex room (optional)"
               className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm sm:col-span-2"
             />
+            <textarea
+              name="questions"
+              defaultValue={et?.questions}
+              rows={3}
+              placeholder={"Booking questions, one per line (optional)\ne.g. PacketFence version?"}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm sm:col-span-2"
+            />
           </div>
         );
         return (

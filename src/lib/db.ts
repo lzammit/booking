@@ -126,6 +126,7 @@ function createDb() {
       window_days INTEGER NOT NULL DEFAULT 30,
       active INTEGER NOT NULL DEFAULT 1,
       meeting_url TEXT NOT NULL DEFAULT '',
+      questions TEXT NOT NULL DEFAULT '', -- one booking question per line
       UNIQUE(team_id, slug)
     );
     CREATE TABLE IF NOT EXISTS slug_aliases (
@@ -187,6 +188,14 @@ function createDb() {
   const teamCols = db.prepare("PRAGMA table_info(teams)").all() as { name: string }[];
   if (!teamCols.some((c) => c.name === "require_live_sync")) {
     db.exec("ALTER TABLE teams ADD COLUMN require_live_sync INTEGER NOT NULL DEFAULT 1");
+  }
+  // Booking questions, asked on the public form (one per line).
+  if (!etCols.some((c) => c.name === "questions")) {
+    db.exec("ALTER TABLE event_types ADD COLUMN questions TEXT NOT NULL DEFAULT ''");
+  }
+  const tetCols = db.prepare("PRAGMA table_info(team_event_types)").all() as { name: string }[];
+  if (!tetCols.some((c) => c.name === "questions")) {
+    db.exec("ALTER TABLE team_event_types ADD COLUMN questions TEXT NOT NULL DEFAULT ''");
   }
   if (!hostCols.some((c) => c.name === "ics_url")) {
     db.exec("ALTER TABLE hosts ADD COLUMN ics_url TEXT");
@@ -292,7 +301,17 @@ export interface EventType {
   window_days: number;
   active: number;
   meeting_url: string;
+  questions: string;
   team_event_type_id: number | null;
+}
+
+/** Booking questions as a clean list: one per line, trimmed, max 10. */
+export function questionList(questions: string | null | undefined): string[] {
+  return (questions ?? "")
+    .split("\n")
+    .map((q) => q.trim())
+    .filter(Boolean)
+    .slice(0, 10);
 }
 
 export interface Team {
@@ -315,6 +334,7 @@ export interface TeamEventType {
   window_days: number;
   active: number;
   meeting_url: string;
+  questions: string;
 }
 
 export interface AvailabilityRule {

@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { headers } from "next/headers";
-import db, { EventType, hostBySlug } from "@/lib/db";
+import db, { EventType, hostBySlug, questionList } from "@/lib/db";
 import { pickLocale, t } from "@/lib/i18n";
 import BookingWidget from "./BookingWidget";
 
@@ -51,6 +51,7 @@ export default async function EventBookingPage({
           hostName={host.name}
           hostTimezone={host.timezone}
           locale={locale}
+          questions={questionList(eventType.questions)}
         />
       </div>
     </main>

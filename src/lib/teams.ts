@@ -129,7 +129,7 @@ export function shadowEventTypeFor(host: Host, tet: TeamEventType): EventType {
     .get(host.id, tet.id) as EventType | undefined;
   if (existing) {
     db.prepare(
-      `UPDATE event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, meeting_url=?
+      `UPDATE event_types SET name=?, description=?, duration_min=?, buffer_min=?, min_notice_min=?, window_days=?, meeting_url=?, questions=?
        WHERE id = ?`
     ).run(
       tet.name,
@@ -139,14 +139,15 @@ export function shadowEventTypeFor(host: Host, tet: TeamEventType): EventType {
       tet.min_notice_min,
       tet.window_days,
       tet.meeting_url,
+      tet.questions,
       existing.id
     );
     return { ...existing, ...tet, id: existing.id, host_id: host.id, active: existing.active, team_event_type_id: tet.id };
   }
   const res = db
     .prepare(
-      `INSERT INTO event_types (host_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days, active, meeting_url, team_event_type_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+      `INSERT INTO event_types (host_id, name, slug, description, duration_min, buffer_min, min_notice_min, window_days, active, meeting_url, questions, team_event_type_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
     )
     .run(
       host.id,
@@ -159,6 +160,7 @@ export function shadowEventTypeFor(host: Host, tet: TeamEventType): EventType {
       tet.min_notice_min,
       tet.window_days,
       tet.meeting_url,
+      tet.questions,
       tet.id
     );
   return db
