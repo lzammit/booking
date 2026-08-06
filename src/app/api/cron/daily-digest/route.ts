@@ -39,6 +39,10 @@ export async function GET(req: NextRequest) {
   const skipped: string[] = [];
   for (const h of hosts) {
     if (onlyHost && h.id !== onlyHost) continue;
+    if (!h.agenda_email) {
+      skipped.push(`${h.slug}: agenda email off`);
+      continue;
+    }
     const nowLocal = DateTime.utc().setZone(h.timezone);
     if (!nowLocal.isValid) continue;
     if (!force && nowLocal.hour !== 7) continue;

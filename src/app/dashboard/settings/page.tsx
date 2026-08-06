@@ -7,8 +7,10 @@ import {
   disconnectMicrosoft,
   disconnectWebex,
   subscribeIcsFeed,
+  toggleAgendaEmail,
   unsubscribeIcsFeed,
 } from "@/lib/actions";
+import AutoSubmitCheckbox from "../admin/AutoSubmitCheckbox";
 import { msAccountFor, msConfigured, msRedirectUri, MS_SCOPES } from "@/lib/msgraph";
 import { webexAccountFor, webexConfigured, webexRedirectUri, WEBEX_SCOPES } from "@/lib/webex";
 import PopupConnectButton from "../PopupConnectButton";
@@ -289,6 +291,16 @@ export default async function SettingsPage({
             {`${process.env.APP_URL}/api/feed/${host.feed_token}.ics`}
           </code>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Notifications</h2>
+        <form action={toggleAgendaEmail} className="mt-2">
+          <AutoSubmitCheckbox
+            checked={host.agenda_email === 1}
+            label="Morning agenda email — your day's bookings at 7:00 AM, only on days you have meetings"
+          />
+        </form>
       </section>
 
       <section className="rounded-xl border border-gray-200 p-4">

@@ -213,6 +213,10 @@ function createDb() {
   if (!hostCols.some((c) => c.name === "feed_token")) {
     db.exec("ALTER TABLE hosts ADD COLUMN feed_token TEXT");
   }
+  if (!hostCols.some((c) => c.name === "agenda_email")) {
+    // Personal 7 AM agenda email; per-host opt-out from Settings.
+    db.exec("ALTER TABLE hosts ADD COLUMN agenda_email INTEGER NOT NULL DEFAULT 1");
+  }
   const tokenless = db
     .prepare("SELECT id FROM hosts WHERE api_token IS NULL OR api_token = ''")
     .all() as { id: number }[];
@@ -297,6 +301,7 @@ export interface Host {
   is_admin: number;
   ics_url: string | null;
   feed_token: string;
+  agenda_email: number;
 }
 
 export interface EventType {

@@ -338,6 +338,14 @@ export async function updateSlug(formData: FormData) {
   redirect("/dashboard?saved=1");
 }
 
+/** Per-host opt-in/out of the personal 7 AM agenda email. */
+export async function toggleAgendaEmail() {
+  const host = await requireHost();
+  db.prepare("UPDATE hosts SET agenda_email = 1 - agenda_email WHERE id = ?").run(host.id);
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings");
+}
+
 export async function updateTimezone(formData: FormData) {
   const host = await requireHost();
   const tz = String(formData.get("timezone") || "");
