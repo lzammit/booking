@@ -152,6 +152,113 @@ export async function sendInviteEmail(
   }
 }
 
+// ----- Digest HTML (shared by the personal agenda and team digest) -----
+//
+// Matches the app's visual identity: paper/ink colors, mono uppercase
+// kickers, and the circadian scale — each meeting is tinted by its local
+// start hour (dawn coral → noon gold → dusk violet), same as the booking
+// widget's slots. Email-safe: tables + inline styles only, no images, no
+// external resources; a plain-text part always rides along.
+
+const DAWN: [number, number, number] = [240, 152, 126]; // 06:00
+const NOON: [number, number, number] = [237, 190, 75]; // 12:00
+const DUSK: [number, number, number] = [124, 111, 217]; // 20:00
+
+function circadian(hourDecimal: number): string {
+  const h = Math.min(20, Math.max(6, hourDecimal));
+  const [from, to, t] = h <= 12 ? [DAWN, NOON, (h - 6) / 6] : [NOON, DUSK, (h - 12) / 8];
+  const mix = from.map((c, i) => Math.round(c + (to[i] - c) * t));
+  return `rgb(${mix[0]}, ${mix[1]}, ${mix[2]})`;
+}
+
+function htmlEscape(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const MONO = "'SF Mono',Menlo,Consolas,'Courier New',monospace";
+const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif";
+
+interface DigestItem {
+  color: string; // circadian tint for this meeting
+  time: string; // "1:00 PM – 1:30 PM"
+  title: string;
+  sub: string;
+  tag?: string; // "via <team>"
+  join?: string; // meeting link
+}
+
+function renderDigestHtml(params: {
+  kicker: string;
+  title: string;
+  subtitle: string;
+  items: DigestItem[];
+  footerNote: string;
+}): string {
+  // The day-arc: the app's gradient signature, as six solid cells so it
+  // renders in clients that ignore CSS gradients (Outlook desktop).
+  const arcColors = [6, 8.8, 11.6, 14.4, 17.2, 20].map(circadian);
+  const arc = arcColors
+    .map(
+      (c, i) =>
+        `<td width="18" height="4" style="background:${c};font-size:0;line-height:0;${i === 0 ? "border-radius:2px 0 0 2px;" : ""}${i === arcColors.length - 1 ? "border-radius:0 2px 2px 0;" : ""}">&nbsp;</td>`
+    )
+    .join("");
+
+  const rows = params.items
+    .map(
+      (it) => `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #ecebe6;border-radius:12px;margin-bottom:10px;background:#ffffff;">
+        <tr>
+          <td width="6" style="background:${it.color};border-radius:12px 0 0 12px;font-size:0;line-height:0;">&nbsp;</td>
+          <td style="padding:13px 16px;">
+            <div style="font-family:${MONO};font-size:12px;color:#1C2333;letter-spacing:0.5px;">${htmlEscape(it.time)}</div>
+            <div style="font-family:${SANS};font-size:15px;font-weight:600;color:#1C2333;padding-top:3px;">${htmlEscape(it.title)}</div>
+            <div style="font-family:${SANS};font-size:13px;color:#6b7280;padding-top:2px;">${htmlEscape(it.sub)}${
+              it.tag
+                ? `&nbsp; <span style="font-family:${SANS};font-size:11px;color:#7C6FD9;background:#f4f1fc;border:1px solid #e2daf6;border-radius:999px;padding:1px 8px;white-space:nowrap;">${htmlEscape(it.tag)}</span>`
+                : ""
+            }</div>
+          </td>
+          ${
+            it.join
+              ? `<td align="right" style="padding:0 14px 0 4px;white-space:nowrap;vertical-align:middle;">
+                   <a href="${htmlEscape(it.join)}" style="display:inline-block;background:#1C2333;color:#FBFAF7;font-family:${SANS};font-size:12px;font-weight:600;text-decoration:none;padding:8px 16px;border-radius:8px;">Join</a>
+                 </td>`
+              : ""
+          }
+        </tr>
+      </table>`
+    )
+    .join("");
+
+  return `<!doctype html>
+<html><body style="margin:0;padding:0;background-color:#FBFAF7;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FBFAF7;">
+  <tr><td align="center" style="padding:28px 12px;">
+    <table role="presentation" width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%;">
+      <tr><td style="background:#ffffff;border:1px solid #e8e6e0;border-radius:16px;padding:30px 30px 24px;">
+        <div style="font-family:${MONO};font-size:11px;letter-spacing:3px;color:#9aa0ab;text-transform:uppercase;">${htmlEscape(params.kicker)}</div>
+        <div style="font-family:${SANS};font-size:27px;font-weight:700;color:#1C2333;padding-top:8px;letter-spacing:-0.5px;">${htmlEscape(params.title)}</div>
+        <div style="font-family:${MONO};font-size:12px;color:#9aa0ab;padding-top:5px;text-transform:uppercase;letter-spacing:1px;">${htmlEscape(params.subtitle)}</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 22px;"><tr>${arc}</tr></table>
+        ${rows}
+        <div style="padding-top:12px;">
+          <a href="${APP_URL}/dashboard" style="font-family:${MONO};font-size:12px;color:#4661c8;text-decoration:none;letter-spacing:0.5px;">Open dashboard &rarr;</a>
+        </div>
+      </td></tr>
+      <tr><td style="padding:16px 10px 0;text-align:center;">
+        <div style="font-family:${MONO};font-size:11px;color:#b3b7c0;line-height:1.6;">${htmlEscape(params.footerNote)}</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+}
+
 /** Morning agenda: today's confirmed meetings for one host. Best effort. */
 export async function sendDailyAgendaEmail(
   host: Host,
@@ -161,8 +268,8 @@ export async function sendDailyAgendaEmail(
   if (!t) return false;
   const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
   const day = DateTime.utc().setZone(host.timezone);
-  const timeOf = (iso: string) =>
-    DateTime.fromISO(iso, { zone: "utc" }).setZone(host.timezone).toFormat("h:mm a");
+  const local = (iso: string) => DateTime.fromISO(iso, { zone: "utc" }).setZone(host.timezone);
+  const timeOf = (iso: string) => local(iso).toFormat("h:mm a");
   const lines = bookings.map((b) => {
     const bits = [
       `${timeOf(b.start_utc)}–${timeOf(b.end_utc)}`,
@@ -172,12 +279,31 @@ export async function sendDailyAgendaEmail(
     if (b.webex_link) bits.push(`Join: ${b.webex_link}`);
     return `• ${bits.join("  ·  ")}`;
   });
+  const html = renderDigestHtml({
+    kicker: `Good morning ${host.name.split(" ")[0]}`,
+    title: day.toFormat("cccc, LLLL d"),
+    subtitle: `${bookings.length} meeting${bookings.length === 1 ? "" : "s"} · ${host.timezone.replace(/_/g, " ")}`,
+    items: bookings.map((b) => {
+      const start = local(b.start_utc);
+      return {
+        color: circadian(start.hour + start.minute / 60),
+        time: `${timeOf(b.start_utc)} – ${timeOf(b.end_utc)}`,
+        title: b.event_name,
+        sub: `${b.guest_name}${b.guest_company ? ` (${b.guest_company})` : ""}`,
+        tag: b.team_name ? `via ${b.team_name}` : undefined,
+        join: b.webex_link ?? undefined,
+      };
+    }),
+    footerNote:
+      "You get this because Morning agenda email is on — Settings → Notifications to turn it off.",
+  });
   try {
     await t.sendMail({
       from,
       to: host.email,
       subject: `Today: ${bookings.length} meeting${bookings.length === 1 ? "" : "s"} — ${day.toFormat("ccc, LLL d")}`,
       text: `Good morning ${host.name.split(" ")[0]},\n\nYour bookings today (${day.toFormat("cccc, LLLL d")}, ${host.timezone}):\n\n${lines.join("\n")}\n\nDashboard: ${APP_URL}/dashboard\n`,
+      html,
     });
     return true;
   } catch (err) {
@@ -197,18 +323,35 @@ export async function sendTeamDigestEmail(
   if (!t) return false;
   const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
   const day = DateTime.utc().setZone(tz);
-  const timeOf = (iso: string) =>
-    DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).toFormat("h:mm a");
+  const local = (iso: string) => DateTime.fromISO(iso, { zone: "utc" }).setZone(tz);
+  const timeOf = (iso: string) => local(iso).toFormat("h:mm a");
   const lines = bookings.map(
     (b) =>
       `• ${timeOf(b.start_utc)}–${timeOf(b.end_utc)}  ${b.host_name}: ${b.event_name} — ${b.guest_name}${b.guest_company ? ` (${b.guest_company})` : ""}${b.team_name ? ` · via ${b.team_name}` : ""}`
   );
+  const html = renderDigestHtml({
+    kicker: teamName,
+    title: day.toFormat("cccc, LLLL d"),
+    subtitle: `${bookings.length} meeting${bookings.length === 1 ? "" : "s"} · ${tz.replace(/_/g, " ")}`,
+    items: bookings.map((b) => {
+      const start = local(b.start_utc);
+      return {
+        color: circadian(start.hour + start.minute / 60),
+        time: `${timeOf(b.start_utc)} – ${timeOf(b.end_utc)}`,
+        title: `${b.event_name} — ${b.guest_name}${b.guest_company ? ` (${b.guest_company})` : ""}`,
+        sub: `with ${b.host_name}`,
+        tag: b.team_name ? `via ${b.team_name}` : undefined,
+      };
+    }),
+    footerNote: `Daily digest for ${teamName} — configured in Admin → Teams.`,
+  });
   try {
     await t.sendMail({
       from,
       to,
       subject: `${teamName} — bookings today: ${bookings.length} — ${day.toFormat("ccc, LLL d")}`,
       text: `${teamName} bookings for ${day.toFormat("cccc, LLLL d")} (${tz}):\n\n${lines.join("\n")}\n\nDashboard: ${APP_URL}/dashboard\n`,
+      html,
     });
     return true;
   } catch (err) {
