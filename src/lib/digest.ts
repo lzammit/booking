@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import db, { Booking, getSetting, setSetting, Team } from "./db";
-import { sendTeamDigestEmail } from "./email";
+import { circadian, sendTeamDigestEmail } from "./email";
 import { postSlackMessage, slackEscape } from "./slack";
 
 export type DigestBooking = Booking & {
@@ -56,10 +56,10 @@ export async function runTeamDigests(force = false, onlyTeamId?: number): Promis
       continue;
     }
 
-    const timeOf = (iso: string) =>
-      DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).toFormat("h:mm a");
-    const line = (b: DigestBooking, esc: (s: string) => string) =>
-      `• ${timeOf(b.start_utc)}–${timeOf(b.end_utc)}  ${esc(b.host_name)}: ${esc(b.event_name)} — ${esc(b.guest_name)}${b.guest_company ? ` (${esc(b.guest_company)})` : ""}${b.team_name ? ` · via ${esc(b.team_name)}` : ""}`;
+    const local = (iso: string) => DateTime.fromISO(iso, { zone: "utc" }).setZone(tz);
+    const timeOf = (iso: string) => local(iso).toFormat("h:mm a");
+    const line = (b: DigestBooking) =>
+      `• ${timeOf(b.start_utc)}–${timeOf(b.end_utc)}  ${slackEscape(b.host_name)}: ${slackEscape(b.event_name)} — ${slackEscape(b.guest_name)}${b.guest_company ? ` (${slackEscape(b.guest_company)})` : ""}${b.team_name ? ` · via ${slackEscape(b.team_name)}` : ""}`;
 
     const results: string[] = [];
     if (team.digest_email) {
@@ -67,9 +67,70 @@ export async function runTeamDigests(force = false, onlyTeamId?: number): Promis
       results.push(ok ? `email → ${team.digest_email}` : "email FAILED");
     }
     if (team.digest_slack_webhook) {
-      const header = `*${slackEscape(team.name)} — bookings today, ${nowLocal.toFormat("cccc, LLLL d")}* (${bookings.length})`;
-      const text = [header, ...bookings.map((b) => line(b, slackEscape))].join("\n");
-      const ok = await postSlackMessage(team.digest_slack_webhook, text);
+      // Same design language as the HTML email: one card per meeting whose
+      // color bar (attachment color) is the circadian tint of its start hour.
+      const MAX_CARDS = 19; // Slack caps attachments at 20; keep one for overflow
+      const shown = bookings.slice(0, MAX_CARDS);
+      const overflow = bookings.length - shown.length;
+      const payload = {
+        text: `${team.name} — bookings today, ${nowLocal.toFormat("ccc, LLL d")} (${bookings.length})`,
+        blocks: [
+          {
+            type: "header",
+            text: { type: "plain_text", text: nowLocal.toFormat("cccc, LLLL d"), emoji: false },
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: `*${slackEscape(team.name.toUpperCase())}*  ·  ${bookings.length} MEETING${bookings.length === 1 ? "" : "S"}  ·  ${tz.replace(/_/g, " ").toUpperCase()}`,
+              },
+            ],
+          },
+        ],
+        attachments: [
+          ...shown.map((b) => {
+            const start = local(b.start_utc);
+            return {
+              color: circadian(start.hour + start.minute / 60),
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text:
+                      `*${timeOf(b.start_utc)} – ${timeOf(b.end_utc)}*   ${slackEscape(b.event_name)} — *${slackEscape(b.guest_name)}*${b.guest_company ? ` (${slackEscape(b.guest_company)})` : ""}\n` +
+                      `_with ${slackEscape(b.host_name)}_${b.team_name ? `  ·  via ${slackEscape(b.team_name)}` : ""}${b.webex_link ? `  ·  <${b.webex_link}|Join>` : ""}`,
+                  },
+                },
+              ],
+            };
+          }),
+          ...(overflow > 0
+            ? [
+                {
+                  color: "#9aa0ab",
+                  blocks: [
+                    {
+                      type: "section",
+                      text: { type: "mrkdwn", text: `_…and ${overflow} more — see the dashboard._` },
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      };
+      let ok = await postSlackMessage(team.digest_slack_webhook, payload);
+      if (!ok) {
+        // Block Kit rejected? Fall back to the plain-text digest rather than
+        // silently dropping the day's summary.
+        ok = await postSlackMessage(
+          team.digest_slack_webhook,
+          [`*${slackEscape(team.name)} — bookings today, ${nowLocal.toFormat("cccc, LLLL d")}* (${bookings.length})`, ...bookings.map(line)].join("\n")
+        );
+      }
       results.push(ok ? "slack → posted" : "slack FAILED");
     }
     if (results.some((r) => !r.includes("FAILED")) && !force) setSetting(marker, today);

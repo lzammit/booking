@@ -164,11 +164,20 @@ const DAWN: [number, number, number] = [240, 152, 126]; // 06:00
 const NOON: [number, number, number] = [237, 190, 75]; // 12:00
 const DUSK: [number, number, number] = [124, 111, 217]; // 20:00
 
-function circadian(hourDecimal: number): string {
+/** Circadian tint as #rrggbb (valid in CSS and Slack attachment colors). */
+export function circadian(hourDecimal: number): string {
   const h = Math.min(20, Math.max(6, hourDecimal));
   const [from, to, t] = h <= 12 ? [DAWN, NOON, (h - 6) / 6] : [NOON, DUSK, (h - 12) / 8];
-  const mix = from.map((c, i) => Math.round(c + (to[i] - c) * t));
-  return `rgb(${mix[0]}, ${mix[1]}, ${mix[2]})`;
+  return (
+    "#" +
+    from
+      .map((c, i) =>
+        Math.round(c + (to[i] - c) * t)
+          .toString(16)
+          .padStart(2, "0")
+      )
+      .join("")
+  );
 }
 
 function htmlEscape(s: string): string {
