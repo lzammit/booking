@@ -1,9 +1,11 @@
 import { DateTime } from "luxon";
-import db from "@/lib/db";
+import db, { Vacation } from "@/lib/db";
 import { requireHost } from "@/lib/session";
 import {
+  addVacation,
   adminConfigureMicrosoft,
   adminConfigureWebex,
+  deleteVacation,
   disconnectMicrosoft,
   disconnectWebex,
   subscribeIcsFeed,
@@ -28,6 +30,10 @@ export default async function SettingsPage({
   const agentSync = db
     .prepare("SELECT source, blocks, last_sync FROM agent_syncs WHERE host_id = ?")
     .all(host.id) as { source: string; blocks: number; last_sync: string }[];
+  const vacations = db
+    .prepare("SELECT * FROM vacations WHERE host_id = ? ORDER BY start_date")
+    .all(host.id) as Vacation[];
+  const today = DateTime.utc().setZone(host.timezone).toISODate()!;
   // Agent pushes every 5 minutes; >15 min silence means it's offline.
   const allSyncs = agentSync.map((s) => {
     const last = DateTime.fromSQL(s.last_sync, { zone: "utc" });
@@ -291,6 +297,64 @@ export default async function SettingsPage({
             {`${process.env.APP_URL}/api/feed/${host.feed_token}.ics`}
           </code>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold">Vacations</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Your booking page shows no availability during these periods (dates are
+          inclusive, in your timezone) — personal and team links alike. Meetings
+          already booked are untouched: cancel or reassign those from the dashboard.
+        </p>
+        {vacations.length > 0 && (
+          <ul className="mt-3 space-y-1">
+            {vacations.map((v) => (
+              <li key={v.id} className="flex items-center gap-2 text-sm">
+                <span className="font-mono tabular-nums">
+                  {v.start_date}
+                  {v.end_date !== v.start_date && <> → {v.end_date}</>}
+                </span>
+                {v.note && <span className="text-gray-500">· {v.note}</span>}
+                {v.end_date < today && (
+                  <span className="text-xs text-gray-400">(past)</span>
+                )}
+                <form action={deleteVacation}>
+                  <input type="hidden" name="id" value={v.id} />
+                  <button
+                    className="text-gray-400 hover:text-red-600"
+                    title="Remove this vacation"
+                  >
+                    ✕
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={addVacation} className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            name="start"
+            required
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+          />
+          <span className="text-gray-400">→</span>
+          <input
+            type="date"
+            name="end"
+            required
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+          />
+          <input
+            name="note"
+            placeholder="Note (optional)"
+            maxLength={120}
+            className="w-48 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+          />
+          <button className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700">
+            Add vacation
+          </button>
+        </form>
       </section>
 
       <section className="rounded-xl border border-gray-200 p-4">

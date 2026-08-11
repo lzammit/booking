@@ -1,6 +1,7 @@
 "use server";
 
 import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import { DateTime } from "luxon";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -336,6 +337,45 @@ export async function updateSlug(formData: FormData) {
   });
   tx();
   redirect("/dashboard?saved=1");
+}
+
+// ----- Vacations (whole-day unavailability, Settings) -----
+
+const VACATION_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function addVacation(formData: FormData) {
+  const host = await requireHost();
+  const start = String(formData.get("start") || "");
+  const end = String(formData.get("end") || "");
+  const note = cleanText(String(formData.get("note") || "")).slice(0, 120);
+  const fail = (msg: string) =>
+    redirect("/dashboard/settings?error=" + encodeURIComponent(msg));
+  if (!VACATION_DATE_RE.test(start) || !VACATION_DATE_RE.test(end)) {
+    fail("Pick valid start and end dates");
+  }
+  const s = DateTime.fromISO(start);
+  const e = DateTime.fromISO(end);
+  if (!s.isValid || !e.isValid || e < s) fail("The end date must not be before the start");
+  if (e.diff(s, "days").days > 365) fail("A vacation can span at most a year");
+  const count = (
+    db.prepare("SELECT COUNT(*) AS c FROM vacations WHERE host_id = ?").get(host.id) as { c: number }
+  ).c;
+  if (count >= 30) fail("Too many vacation entries — remove old ones first");
+  db.prepare(
+    "INSERT INTO vacations (host_id, start_date, end_date, note) VALUES (?, ?, ?, ?)"
+  ).run(host.id, start, end, note);
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings");
+}
+
+export async function deleteVacation(formData: FormData) {
+  const host = await requireHost();
+  db.prepare("DELETE FROM vacations WHERE id = ? AND host_id = ?").run(
+    Number(formData.get("id")),
+    host.id
+  );
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings");
 }
 
 /** Per-host opt-in/out of the personal 7 AM agenda email. */

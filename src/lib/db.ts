@@ -134,6 +134,16 @@ function createDb() {
       questions TEXT NOT NULL DEFAULT '', -- one booking question per line
       UNIQUE(team_id, slug)
     );
+    CREATE TABLE IF NOT EXISTS vacations (
+      -- Whole-day unavailability ranges (inclusive, host-local dates).
+      -- Blocks new bookings only; existing ones must be cancelled/reassigned.
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      host_id INTEGER NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+      start_date TEXT NOT NULL, -- yyyy-MM-dd
+      end_date TEXT NOT NULL,   -- yyyy-MM-dd, >= start_date
+      note TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_vacations_host ON vacations(host_id, end_date);
     CREATE TABLE IF NOT EXISTS slug_aliases (
       -- Previously-used booking slugs. When a host renames their link, the old
       -- slug is parked here so shared links / email signatures keep working
@@ -353,6 +363,14 @@ export interface TeamEventType {
   active: number;
   meeting_url: string;
   questions: string;
+}
+
+export interface Vacation {
+  id: number;
+  host_id: number;
+  start_date: string;
+  end_date: string;
+  note: string;
 }
 
 export interface AvailabilityRule {

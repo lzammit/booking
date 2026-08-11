@@ -73,6 +73,19 @@ export async function computeSlots(
     if (iv.isValid) busy.push(iv);
   }
 
+  // Vacations: whole-day blocks (inclusive, host-local). Blocking here means
+  // personal pages, team pages, and reschedules all respect them.
+  const vacations = db
+    .prepare("SELECT start_date, end_date FROM vacations WHERE host_id = ?")
+    .all(host.id) as { start_date: string; end_date: string }[];
+  for (const v of vacations) {
+    const iv = Interval.fromDateTimes(
+      DateTime.fromISO(v.start_date, { zone }).startOf("day"),
+      DateTime.fromISO(v.end_date, { zone }).endOf("day")
+    );
+    if (iv.isValid) busy.push(iv);
+  }
+
   const durationMin = eventType.duration_min;
   const bufferMin = eventType.buffer_min;
   const slots: string[] = [];
