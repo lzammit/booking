@@ -33,6 +33,13 @@ export async function GET(req: NextRequest) {
   }
   const force = req.nextUrl.searchParams.get("force") === "1";
   const onlyHost = Number(req.nextUrl.searchParams.get("host")) || null;
+  const onlyTeam = Number(req.nextUrl.searchParams.get("team")) || null;
+
+  // ?team=<id> debug knob: fire just that team's digest, no personal agendas.
+  if (onlyTeam) {
+    const teams = await runTeamDigests(force, onlyTeam);
+    return NextResponse.json({ ok: true, sent: 0, skipped: [], teams });
+  }
 
   const hosts = db.prepare("SELECT * FROM hosts").all() as Host[];
   let sent = 0;
