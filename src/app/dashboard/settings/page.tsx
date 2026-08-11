@@ -21,19 +21,36 @@ import SignatureCard from "../SignatureCard";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; warn?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, warn } = await searchParams;
   const host = await requireHost();
   const msAccount = msAccountFor(host.id);
   const webexAccount = webexAccountFor(host.id);
   const agentSync = db
     .prepare("SELECT source, blocks, last_sync FROM agent_syncs WHERE host_id = ?")
     .all(host.id) as { source: string; blocks: number; last_sync: string }[];
-  const vacations = db
-    .prepare("SELECT * FROM vacations WHERE host_id = ? ORDER BY start_date")
-    .all(host.id) as Vacation[];
   const today = DateTime.utc().setZone(host.timezone).toISODate()!;
+  const nowIso = DateTime.utc().toISO();
+  const overlapCount = db.prepare(
+    "SELECT COUNT(*) AS c FROM bookings WHERE host_id = ? AND status = 'confirmed' AND end_utc > ? AND start_utc < ? AND end_utc > ?"
+  );
+  const vacations = (
+    db
+      .prepare("SELECT * FROM vacations WHERE host_id = ? ORDER BY start_date")
+      .all(host.id) as Vacation[]
+  ).map((v) => ({
+    ...v,
+    // Upcoming confirmed meetings already booked inside this window.
+    overlaps: (
+      overlapCount.get(
+        host.id,
+        nowIso,
+        DateTime.fromISO(v.end_date, { zone: host.timezone }).endOf("day").toUTC().toISO(),
+        DateTime.fromISO(v.start_date, { zone: host.timezone }).startOf("day").toUTC().toISO()
+      ) as { c: number }
+    ).c,
+  }));
   // Agent pushes every 5 minutes; >15 min silence means it's offline.
   const allSyncs = agentSync.map((s) => {
     const last = DateTime.fromSQL(s.last_sync, { zone: "utc" });
@@ -56,6 +73,14 @@ export default async function SettingsPage({
       {error && (
         <p className="rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
           {error}
+        </p>
+      )}
+      {warn && (
+        <p className="rounded-md bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-sm">
+          {warn}{" "}
+          <a href="/dashboard" className="font-medium underline">
+            Review your bookings →
+          </a>
         </p>
       )}
 
@@ -317,6 +342,15 @@ export default async function SettingsPage({
                 {v.note && <span className="text-gray-500">· {v.note}</span>}
                 {v.end_date < today && (
                   <span className="text-xs text-gray-400">(past)</span>
+                )}
+                {v.overlaps > 0 && (
+                  <a
+                    href="/dashboard"
+                    className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                    title="Reassign or cancel these from the dashboard"
+                  >
+                    ⚠ {v.overlaps} meeting{v.overlaps === 1 ? "" : "s"} booked in this period
+                  </a>
                 )}
                 <form action={deleteVacation}>
                   <input type="hidden" name="id" value={v.id} />

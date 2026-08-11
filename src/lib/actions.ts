@@ -365,6 +365,25 @@ export async function addVacation(formData: FormData) {
     "INSERT INTO vacations (host_id, start_date, end_date, note) VALUES (?, ?, ?, ?)"
   ).run(host.id, start, end, note);
   revalidatePath("/dashboard/settings");
+  // The vacation only blocks NEW bookings — flag anything already booked in
+  // that window so it gets reassigned or cancelled instead of forgotten.
+  const winStart = DateTime.fromISO(start, { zone: host.timezone }).startOf("day").toUTC().toISO();
+  const winEnd = DateTime.fromISO(end, { zone: host.timezone }).endOf("day").toUTC().toISO();
+  const overlaps = (
+    db
+      .prepare(
+        "SELECT COUNT(*) AS c FROM bookings WHERE host_id = ? AND status = 'confirmed' AND end_utc > ? AND start_utc < ? AND end_utc > ?"
+      )
+      .get(host.id, new Date().toISOString(), winEnd, winStart) as { c: number }
+  ).c;
+  if (overlaps > 0) {
+    redirect(
+      "/dashboard/settings?warn=" +
+        encodeURIComponent(
+          `Vacation added — but ${overlaps} upcoming meeting${overlaps === 1 ? " is" : "s are"} already booked in this period. Reassign or cancel ${overlaps === 1 ? "it" : "them"} so nobody shows up while you're away.`
+        )
+    );
+  }
   redirect("/dashboard/settings");
 }
 
