@@ -189,6 +189,9 @@ export default async function DashboardPage({
                     className={`font-medium ${b.status === "cancelled" ? "line-through text-gray-400" : ""}`}
                   >
                     {b.event_name} — {b.guest_name}
+                    {b.guest_company && (
+                      <span className="font-normal text-gray-500"> ({b.guest_company})</span>
+                    )}
                   </span>{" "}
                   <span className="text-gray-500">
                     {fmt(b.start_utc)}
