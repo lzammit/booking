@@ -332,8 +332,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for event in events {
             // All-day items default to "Free" (birthdays, subscribed holiday
             // calendars) — but ones explicitly marked Busy or Out of Office
-            // (e.g. a wellness day) must block the whole day.
-            if event.isAllDay,
+            // (e.g. a wellness day) must block the whole day. Multi-day
+            // midnight-to-midnight events (a teammate's "PTO" banner) render
+            // in the all-day row but aren't flagged isAllDay by EventKit, so
+            // anything spanning ≥20h gets the same explicit-Busy requirement.
+            let wholeDayish = event.isAllDay
+                || (event.endDate?.timeIntervalSince(event.startDate ?? Date()) ?? 0) >= 20 * 3600
+            if wholeDayish,
                event.availability != .busy && event.availability != .unavailable {
                 continue
             }
