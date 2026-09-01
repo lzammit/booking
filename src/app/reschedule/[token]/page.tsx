@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import db, { Booking, EventType, Host } from "@/lib/db";
 import { Locale, pickLocale, t } from "@/lib/i18n";
+import { getSession } from "@/lib/session";
+import { hostFreeReschedule } from "@/lib/actions";
 import BookingWidget from "../../book/[slug]/[eventSlug]/BookingWidget";
 
 export default async function ReschedulePage({
@@ -23,6 +25,14 @@ export default async function ReschedulePage({
   const eventType = db
     .prepare("SELECT * FROM event_types WHERE id = ?")
     .get(booking.event_type_id) as EventType;
+
+  // The booking's own host gets a free-move panel: any future time, no
+  // window/notice/availability constraints.
+  const session = await getSession();
+  const isOwner = session.hostId === booking.host_id;
+  const currentHostLocal = DateTime.fromISO(booking.start_utc, { zone: "utc" })
+    .setZone(host.timezone)
+    .toFormat("yyyy-MM-dd'T'HH:mm");
 
   const current = DateTime.fromISO(booking.start_utc, { zone: "utc" })
     .setZone(booking.guest_timezone)
@@ -57,6 +67,31 @@ export default async function ReschedulePage({
         </Link>
       </p>
       <div className="day-arc mt-5 w-24" />
+      {isOwner && (
+        <div className="mt-6 rounded-xl border border-ink/10 bg-white p-4">
+          <p className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-ink/50">
+            Host move — no restrictions
+          </p>
+          <p className="mt-1 text-sm text-ink/60">
+            Put it anywhere: outside your hours, past the booking window, even over
+            another meeting (you&apos;ll get a warning, not a block). The guest is
+            notified and their invite updates. Time below is yours ({host.timezone.replace(/_/g, " ")}).
+          </p>
+          <form action={hostFreeReschedule} className="mt-3 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="id" value={booking.id} />
+            <input
+              type="datetime-local"
+              name="newstart"
+              required
+              defaultValue={currentHostLocal}
+              className="rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm"
+            />
+            <button className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-paper hover:opacity-90">
+              Move it there
+            </button>
+          </form>
+        </div>
+      )}
       <div className="mt-8">
         <BookingWidget
           eventTypeId={eventType.id}

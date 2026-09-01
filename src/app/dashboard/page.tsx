@@ -12,9 +12,9 @@ import ConfirmSubmit from "./admin/ConfirmSubmit";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; warn?: string }>;
 }) {
-  const { error, saved } = await searchParams;
+  const { error, saved, warn } = await searchParams;
   const host = await requireHost();
   const appHost = (process.env.APP_URL || "").replace(/^https?:\/\//, "");
   const nowIso = DateTime.utc().toISO();
@@ -81,6 +81,11 @@ export default async function DashboardPage({
       {error && (
         <p className="rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
           {error}
+        </p>
+      )}
+      {warn && (
+        <p className="rounded-md bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-sm">
+          {warn}
         </p>
       )}
       {saved && (

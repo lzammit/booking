@@ -24,8 +24,13 @@ import {
   sendPasswordResetEmail,
 } from "./email";
 import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
-import { deleteOutlookEvent, msDisconnect } from "./msgraph";
-import { createWebexMeeting, deleteWebexMeeting, webexDisconnect } from "./webex";
+import { deleteOutlookEvent, msDisconnect, updateOutlookEvent } from "./msgraph";
+import {
+  createWebexMeeting,
+  deleteWebexMeeting,
+  updateWebexMeeting,
+  webexDisconnect,
+} from "./webex";
 import { cleanText, clientIp, rateLimit } from "./ratelimit";
 import { shadowEventTypeFor } from "./teams";
 import { isSlotFree } from "./slots";
@@ -589,6 +594,81 @@ export async function reassignTeamBooking(formData: FormData) {
   await sendBookingEmails(fresh, target!, shadow, "confirmed");
 
   revalidatePath("/dashboard");
+  redirect("/dashboard?saved=1");
+}
+
+/**
+ * Host-only free reschedule: place the meeting at ANY future time — no
+ * booking window, no minimum notice, no working-hours or busy-slot checks.
+ * The host knows their calendar; the only guard is "not in the past". If the
+ * new time collides with something, the move still happens and the dashboard
+ * shows a warning instead of blocking.
+ */
+export async function hostFreeReschedule(formData: FormData) {
+  const host = await requireHost();
+  const id = Number(formData.get("id"));
+  const raw = String(formData.get("newstart") || ""); // yyyy-MM-ddTHH:mm, host-local
+  const fail = (msg: string) => redirect("/dashboard?error=" + encodeURIComponent(msg));
+
+  const booking = db
+    .prepare("SELECT * FROM bookings WHERE id = ? AND host_id = ? AND status = 'confirmed'")
+    .get(id, host.id) as Booking | undefined;
+  if (!booking) fail("Booking not found");
+  const start = DateTime.fromISO(raw, { zone: host.timezone });
+  if (!start.isValid) fail("Pick a valid date and time");
+  if (start < DateTime.utc()) fail("That time is in the past");
+
+  const eventType = db
+    .prepare("SELECT * FROM event_types WHERE id = ?")
+    .get(booking!.event_type_id) as EventType;
+  const startIso = start.toUTC().toISO()!;
+  const endIso = start.plus({ minutes: eventType.duration_min }).toUTC().toISO()!;
+
+  db.prepare(
+    "UPDATE bookings SET start_utc = ?, end_utc = ?, sequence = sequence + 1 WHERE id = ?"
+  ).run(startIso, endIso, booking!.id);
+  const updated = db.prepare("SELECT * FROM bookings WHERE id = ?").get(booking!.id) as Booking;
+
+  if (updated.webex_meeting_id) {
+    await updateWebexMeeting({
+      hostId: host.id,
+      meetingId: updated.webex_meeting_id,
+      title: `${eventType.name} — ${host.name} / ${updated.guest_name}`,
+      startUtc: startIso,
+      endUtc: endIso,
+    });
+  }
+  if (updated.ms_event_id) {
+    await updateOutlookEvent(host.id, updated.ms_event_id, startIso, endIso);
+  }
+  await sendBookingEmails(updated, host, eventType, "rescheduled");
+
+  // Not a blocker, but worth surfacing: does the new time collide?
+  const conflicts =
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS c FROM bookings WHERE host_id = ? AND status = 'confirmed' AND id != ? AND start_utc < ? AND end_utc > ?"
+        )
+        .get(host.id, updated.id, endIso, startIso) as { c: number }
+    ).c +
+    (
+      db
+        .prepare(
+          "SELECT COUNT(*) AS c FROM external_busy WHERE host_id = ? AND start_utc < ? AND end_utc > ?"
+        )
+        .get(host.id, endIso, startIso) as { c: number }
+    ).c;
+
+  revalidatePath("/dashboard");
+  if (conflicts > 0) {
+    redirect(
+      "/dashboard?warn=" +
+        encodeURIComponent(
+          `Moved — but the new time overlaps ${conflicts} existing booking${conflicts === 1 ? "" : "s"} or calendar event${conflicts === 1 ? "" : "s"}. Double-check your calendar.`
+        )
+    );
+  }
   redirect("/dashboard?saved=1");
 }
 
