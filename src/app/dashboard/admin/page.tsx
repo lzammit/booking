@@ -617,10 +617,11 @@ export default async function AdminPage({
             <div className="mt-3 border-t border-gray-100 pt-3">
               <h3 className="text-sm font-medium text-gray-700">Daily digest</h3>
               <p className="mt-1 text-xs text-gray-500">
-                At 7:00 AM{team.digest_tz ? ` (${team.digest_tz})` : ""}, this team&apos;s
-                bookings for the day go to these destinations. Empty = off; days with
-                no bookings send nothing. Members still get their personal 7 AM agenda
-                email either way.
+                At 7:00 AM{team.digest_tz ? ` (${team.digest_tz})` : ""}, the day&apos;s
+                meetings <em>booked through this team&apos;s link</em> go to these
+                destinations — members&apos; personal bookings stay private. Empty = off;
+                days with no team bookings send nothing. Members still get their
+                personal 7 AM agenda email either way.
               </p>
               <form
                 action={adminSaveTeamDigest}

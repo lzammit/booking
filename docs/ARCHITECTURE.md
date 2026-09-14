@@ -167,8 +167,10 @@ check-in invisible. The admin Teams section shows members green (live) or red
 address and/or a Slack *incoming webhook* URL (admin UI). An hourly cron hits
 `/api/cron/daily-digest` (authenticated with a server-side bearer secret); at
 07:00 in the team's digest timezone the app POSTs one message summarizing the
-members' bookings for the day — meeting time, meeting type, host, guest name
-and company. Data flow is strictly one-way, app → Slack: the webhook is
+day's meetings **booked through the team's link** (`bookings.team_id`) —
+meeting time, meeting type, assigned host, guest name and company. Members'
+personal bookings never appear in the shared digest; those go only to each
+member's private agenda email. Data flow is strictly one-way, app → Slack: the webhook is
 write-only to the single channel chosen at install time, the app requests no
 other Slack scopes, reads nothing from Slack, and posts as itself (never as an
 employee). No guest email addresses or booking notes are included in the

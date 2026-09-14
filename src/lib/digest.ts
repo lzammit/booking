@@ -35,22 +35,26 @@ export async function runTeamDigests(force = false, onlyTeamId?: number): Promis
     if (!force && nowLocal.hour !== 7) continue;
     if (!force && getSetting(marker) === today) continue;
 
-    const bookings = db
-      .prepare(
-        `SELECT b.*, e.name AS event_name, t2.name AS team_name, h.name AS host_name
-         FROM bookings b
-         JOIN team_members m ON m.host_id = b.host_id AND m.team_id = ?
-         JOIN hosts h ON h.id = b.host_id
-         JOIN event_types e ON e.id = b.event_type_id
-         LEFT JOIN teams t2 ON t2.id = b.team_id
-         WHERE b.status = 'confirmed' AND b.start_utc >= ? AND b.start_utc <= ?
-         ORDER BY b.start_utc`
-      )
-      .all(
-        team.id,
-        nowLocal.startOf("day").toUTC().toISO(),
-        nowLocal.endOf("day").toUTC().toISO()
-      ) as DigestBooking[];
+    // Only meetings booked THROUGH this team's link (b.team_id). Members'
+    // personal bookings are private to them — they belong in the personal
+    // agenda email, never in a shared channel. team_name is nulled because
+    // every row here is via this team; a pill on each line would be noise.
+    const bookings = (
+      db
+        .prepare(
+          `SELECT b.*, e.name AS event_name, h.name AS host_name
+           FROM bookings b
+           JOIN hosts h ON h.id = b.host_id
+           JOIN event_types e ON e.id = b.event_type_id
+           WHERE b.team_id = ? AND b.status = 'confirmed' AND b.start_utc >= ? AND b.start_utc <= ?
+           ORDER BY b.start_utc`
+        )
+        .all(
+          team.id,
+          nowLocal.startOf("day").toUTC().toISO(),
+          nowLocal.endOf("day").toUTC().toISO()
+        ) as DigestBooking[]
+    ).map((b) => ({ ...b, team_name: null }));
     if (bookings.length === 0) {
       if (force) out.push(`${team.name}: no bookings today`);
       continue;
