@@ -305,6 +305,8 @@ export default function BookingWidget({
   const inputClass =
     "w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm text-ink";
   const labelClass = "block text-sm text-ink";
+  const consentLinkClass =
+    "rounded-sm text-ink underline underline-offset-4 decoration-ink/40 hover:decoration-ink";
 
   return (
     <div className="grid gap-10 md:grid-cols-[1fr_280px]">
@@ -609,6 +611,25 @@ export default function BookingWidget({
             <div role="alert" aria-live="assertive">
               {error && <p className="text-sm text-red-700">{error}</p>}
             </div>
+            {!rescheduleToken && (
+              <p className="text-xs leading-relaxed text-ink/70">
+                {t(locale, "agreeLine")
+                  .split(/(\{privacy\}|\{terms\})/)
+                  .map((part, i) =>
+                    part === "{privacy}" ? (
+                      <a key={i} href="/privacy" className={consentLinkClass}>
+                        {t(locale, "privacyPolicy")}
+                      </a>
+                    ) : part === "{terms}" ? (
+                      <a key={i} href="/terms" className={consentLinkClass}>
+                        {t(locale, "termsOfUse")}
+                      </a>
+                    ) : (
+                      part
+                    )
+                  )}
+              </p>
+            )}
             <div className="flex gap-2">
               <button
                 type="submit"
