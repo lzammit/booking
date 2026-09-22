@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import db, { questionList, TeamEventType } from "@/lib/db";
 import { teamBySlug, teamMembers } from "@/lib/teams";
 import { pickLocale, t } from "@/lib/i18n";
+import SiteFooter from "@/app/SiteFooter";
 import BookingWidget from "@/app/book/[slug]/[eventSlug]/BookingWidget";
 
 export default async function TeamEventBookingPage({
@@ -30,38 +31,41 @@ export default async function TeamEventBookingPage({
   const teamTz = [...tzCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 
   return (
-    <main className="flex-1 mx-auto w-full max-w-3xl px-6 py-14">
-      <Link
-        href={`/team/${team.slug}`}
-        className="font-mono text-xs uppercase tracking-[0.15em] text-ink/70 hover:text-ink"
-      >
-        ← {t(locale, "allMeetingTypes")}
-      </Link>
-      <p className="mt-5 font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/70">
-        {team.name}
-      </p>
-      <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">
-        {eventType.name}
-      </h1>
-      <p className="mt-1 text-ink/70">
-        <span className="font-mono tabular-nums">
-          {eventType.duration_min} {t(locale, "min")}
-        </span>
-        {eventType.description && <> · {eventType.description}</>}
-      </p>
-      <p className="mt-1 text-sm text-ink/70">{t(locale, "teamMatched")}</p>
-      <div className="day-arc mt-5 w-24" />
-      <div className="mt-8">
-        <BookingWidget
-          teamEventTypeId={eventType.id}
-          durationMin={eventType.duration_min}
-          windowDays={eventType.window_days}
-          hostName={team.name}
-          hostTimezone={teamTz}
-          locale={locale}
-          questions={questionList(eventType.questions)}
-        />
-      </div>
-    </main>
+    <>
+      <main className="flex-1 mx-auto w-full max-w-3xl px-6 py-14">
+        <Link
+          href={`/team/${team.slug}`}
+          className="font-mono text-xs uppercase tracking-[0.15em] text-ink/70 hover:text-ink"
+        >
+          ← {t(locale, "allMeetingTypes")}
+        </Link>
+        <p className="mt-5 font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/70">
+          {team.name}
+        </p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">
+          {eventType.name}
+        </h1>
+        <p className="mt-1 text-ink/70">
+          <span className="font-mono tabular-nums">
+            {eventType.duration_min} {t(locale, "min")}
+          </span>
+          {eventType.description && <> · {eventType.description}</>}
+        </p>
+        <p className="mt-1 text-sm text-ink/70">{t(locale, "teamMatched")}</p>
+        <div className="day-arc mt-5 w-24" />
+        <div className="mt-8">
+          <BookingWidget
+            teamEventTypeId={eventType.id}
+            durationMin={eventType.duration_min}
+            windowDays={eventType.window_days}
+            hostName={team.name}
+            hostTimezone={teamTz}
+            locale={locale}
+            questions={questionList(eventType.questions)}
+          />
+        </div>
+      </main>
+      <SiteFooter locale={locale} />
+    </>
   );
 }

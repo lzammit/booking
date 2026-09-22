@@ -7,6 +7,7 @@ import { sendBookingEmails } from "@/lib/email";
 import { deleteOutlookEvent } from "@/lib/msgraph";
 import { deleteWebexMeeting } from "@/lib/webex";
 import { pickLocale, t } from "@/lib/i18n";
+import SiteFooter from "@/app/SiteFooter";
 
 async function cancelAction(formData: FormData) {
   "use server";
@@ -59,46 +60,49 @@ export default async function CancelPage({
     });
 
   return (
-    <main className="flex-1 flex items-center justify-center p-8">
-      <div className="w-full max-w-md rounded-2xl border border-ink/10 bg-white p-8 space-y-4">
-        <div className="day-arc w-full" />
-        <h1 className="text-2xl font-semibold text-ink">
-          {booking.status === "cancelled"
-            ? t(locale, "cancelledTitle")
-            : t(locale, "cancelTitle")}
-        </h1>
-        <div className="text-sm text-ink/70 space-y-1">
-          <p className="font-semibold text-ink">
-            {t(locale, "withHost", { event: eventType.name, host: host.name })}
-          </p>
-          <p className="font-mono">{when}</p>
-          <p>
-            {booking.guest_name} · {booking.guest_email}
-          </p>
-        </div>
-        {booking.status === "confirmed" ? (
-          <>
-            <p className="text-sm">
-              <a
-                href={`/reschedule/${token}`}
-                className="text-ink underline underline-offset-4 hover:opacity-70"
-              >
-                {t(locale, "rescheduleInstead")}
-              </a>
+    <>
+      <main className="flex-1 flex items-center justify-center p-8">
+        <div className="w-full max-w-md rounded-2xl border border-ink/10 bg-white p-8 space-y-4">
+          <div className="day-arc w-full" />
+          <h1 className="text-2xl font-semibold text-ink">
+            {booking.status === "cancelled"
+              ? t(locale, "cancelledTitle")
+              : t(locale, "cancelTitle")}
+          </h1>
+          <div className="text-sm text-ink/70 space-y-1">
+            <p className="font-semibold text-ink">
+              {t(locale, "withHost", { event: eventType.name, host: host.name })}
             </p>
-            <form action={cancelAction}>
-              <input type="hidden" name="token" value={token} />
-              <button className="w-full rounded-lg bg-ink px-4 py-2.5 font-semibold text-paper hover:opacity-90">
-                {t(locale, "cancelButton")}
-              </button>
-            </form>
-          </>
-        ) : (
-          <p className="text-sm text-ink/70 bg-paper border border-ink/10 rounded-md px-3 py-2">
-            {t(locale, "cancelledInfo")}
-          </p>
-        )}
-      </div>
-    </main>
+            <p className="font-mono">{when}</p>
+            <p>
+              {booking.guest_name} · {booking.guest_email}
+            </p>
+          </div>
+          {booking.status === "confirmed" ? (
+            <>
+              <p className="text-sm">
+                <a
+                  href={`/reschedule/${token}`}
+                  className="text-ink underline underline-offset-4 hover:opacity-70"
+                >
+                  {t(locale, "rescheduleInstead")}
+                </a>
+              </p>
+              <form action={cancelAction}>
+                <input type="hidden" name="token" value={token} />
+                <button className="w-full rounded-lg bg-ink px-4 py-2.5 font-semibold text-paper hover:opacity-90">
+                  {t(locale, "cancelButton")}
+                </button>
+              </form>
+            </>
+          ) : (
+            <p className="text-sm text-ink/70 bg-paper border border-ink/10 rounded-md px-3 py-2">
+              {t(locale, "cancelledInfo")}
+            </p>
+          )}
+        </div>
+      </main>
+      <SiteFooter locale={locale} />
+    </>
   );
 }
