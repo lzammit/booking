@@ -198,7 +198,7 @@ required.
 | `CRON_SECRET` | | Bearer token for `/api/cron/daily-digest`. Point an hourly cron at that route; it sends the morning agendas and runs the booking retention purge. Without it the route answers 503 and nothing is purged. |
 | `BOOKING_RETENTION_MONTHS` | | How long finished bookings are kept before the cron route deletes them (guest name, email, company, notes included). Default `12`; `0` disables the purge. |
 | `TOKEN_ENCRYPTION_KEY` | | Encrypts Microsoft 365 and Webex OAuth tokens at rest (AES-256-GCM). Generate with `openssl rand -hex 32`. Unset = tokens stored in clear, with a one-time warning in the log. Rows written before the key was set are re-encrypted the next time they are read. Changing the key later invalidates existing tokens; hosts then reconnect from Settings. |
-| `EMBED_ALLOWED_ORIGINS` | | Space-separated origins allowed to embed `/book/*` and `/team/*` in an iframe, e.g. `https://support.example.com https://intranet.example.net`. Unset = same origin only. Read at build time: rerun `npm run build` after changing it. |
+| `EMBED_ALLOWED_ORIGINS` | | Space-separated origins allowed to embed `/book/*` and `/team/*` in an iframe, e.g. `https://support.example.com https://intranet.example.net`. Unset = same origin only; a single `*` allows any site (the old default). Read at build time: rerun `npm run build` after changing it. |
 
 See [`.env.example`](.env.example) for a copyable template.
 

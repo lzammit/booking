@@ -7,7 +7,11 @@ import type { NextConfig } from "next";
  * means same-origin only, so nobody can frame the booking form by default.
  */
 function frameAncestors(): string {
-  const origins = (process.env.EMBED_ALLOWED_ORIGINS ?? "")
+  const raw = (process.env.EMBED_ALLOWED_ORIGINS ?? "").trim();
+  // A single "*" keeps the pre-allow-list behaviour: any site may embed the
+  // public pages. Use it only while the embedding sites are not known.
+  if (raw === "*") return "*";
+  const origins = raw
     .split(/\s+/)
     .map((o) => o.trim())
     .filter((o) => /^https?:\/\/[^\s;,'"]+$/.test(o));
