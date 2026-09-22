@@ -61,6 +61,11 @@ time slots colour-coded by time of day](docs/screenshots/event-page.png)
   invitation code, and email invitations.
 - **Distinctive design** — a deliberate visual identity (see the signature idea
   above), theme-aware, accessible.
+- **Legal pages**: `/legal`, `/privacy` and `/terms` in English and French,
+  linked from a footer on every public page, from the booking form and from
+  the guest emails. The privacy text quotes the retention period, cookie
+  lifetime and busy-time windows straight from the code (`src/lib/legal.ts`,
+  `src/lib/legal-facts.ts`).
 
 ## Tech stack
 
@@ -239,12 +244,14 @@ src/
     api/                     Route handlers (slots, book, busy, feed,
                              agent, resend-invites, ms oauth, agent download)
     login, signup, cancel    Auth + guest cancellation
+    legal, privacy, terms    Public legal pages (EN/FR)
   lib/
     db.ts                    SQLite schema + typed accessors
     slots.ts                 Availability / slot computation
     session.ts               iron-session helpers + auth guards
     actions.ts               Server actions (forms, admin)
     email.ts, ics.ts         Email + iCalendar building
+    legal.ts, legal-facts.ts Text of the legal pages + the values they quote
     icsfeed.ts               ICS subscription feed
     msgraph.ts               Optional Microsoft 365 sync
 mac-agent/                   Swift menu-bar companion app + build/install

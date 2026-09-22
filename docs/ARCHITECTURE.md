@@ -52,6 +52,12 @@ flowchart TB
 - **Dashboard** (`src/app/dashboard/…`) — auth-gated. Bookings list, availability
   editor, event-type editor, settings, and the admin console. The dashboard
   layout enforces `requireHost()`; the admin page enforces `requireAdmin()`.
+- **Legal pages** (`src/app/legal`, `src/app/privacy`, `src/app/terms`): no
+  auth, English and French from `Accept-Language` like the booking pages. The
+  text lives in `src/lib/legal.ts`; the numbers it quotes (retention months,
+  session cookie name and lifetime, agent and feed busy windows) come from
+  `src/lib/legal-facts.ts`, which reads them from `db.ts`, `session.ts` and
+  `icsfeed.ts`. `SiteFooter` links the three pages from every public page.
 - **API routes** (`src/app/api/…`) — see [API surface](#api-surface).
 - **Server actions** (`src/lib/actions.ts`) — form submissions (signup, login,
   availability, event types, slug, admin operations) run as server actions
@@ -213,6 +219,12 @@ The ICS feed and agent-pull authenticate differently on purpose:
 
 ## API surface
 
+Public pages: `/` (landing), `/book/[slug]`, `/book/[slug]/[eventSlug]`,
+`/team/[slug]`, `/team/[slug]/[eventSlug]`, `/cancel/[token]`,
+`/reschedule/[token]`, `/legal`, `/privacy`, `/terms`. Auth pages: `/login`,
+`/signup`, `/forgot`, `/reset/[token]`. Everything under `/dashboard` requires
+a host session.
+
 | Route | Auth | Purpose |
 |---|---|---|
 | `GET /api/slots` | none | Available slots for an event type over a date range. `teamEventTypeId` instead of `eventTypeId` returns the team union. |
@@ -268,6 +280,10 @@ types, slug, and all admin operations.
   Only a row count is logged.
 - The guest email is not repeated in the Outlook body or Webex agenda; the
   attendee / invitee field already carries it.
+- `/privacy` is the public statement of the above. The booking form links to
+  it and to `/terms` next to the submit button, and every guest email ends
+  with the `/privacy` link. When retention, cookie or sync behaviour changes,
+  update `src/lib/legal.ts` and bump `LEGAL_UPDATED` in the same commit.
 
 ## Deployment
 
