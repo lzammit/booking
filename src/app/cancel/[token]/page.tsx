@@ -2,7 +2,7 @@ import { DateTime } from "luxon";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import db, { Booking, EventType, Host } from "@/lib/db";
+import db, { Booking, clearBookingNotes, EventType, Host } from "@/lib/db";
 import { sendBookingEmails } from "@/lib/email";
 import { deleteOutlookEvent } from "@/lib/msgraph";
 import { deleteWebexMeeting } from "@/lib/webex";
@@ -23,6 +23,9 @@ async function cancelAction(formData: FormData) {
   if (booking.ms_event_id) await deleteOutlookEvent(host.id, booking.ms_event_id);
   if (booking.webex_meeting_id) await deleteWebexMeeting(host.id, booking.webex_meeting_id);
   await sendBookingEmails({ ...booking, status: "cancelled" }, host, eventType, "cancelled");
+  // The cancellation email was the last use of the guest's free-text notes
+  // and question answers (folded into notes); nothing downstream needs them.
+  clearBookingNotes(booking.id);
   revalidatePath(`/cancel/${token}`);
 }
 

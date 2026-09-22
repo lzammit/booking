@@ -1,12 +1,13 @@
 import { createHash, timingSafeEqual } from "crypto";
 import { DateTime } from "luxon";
 import { NextRequest, NextResponse } from "next/server";
-import db, { Booking, getSetting, Host, setSetting } from "@/lib/db";
+import db, { Booking, getSetting, Host, purgeOldBookings, setSetting } from "@/lib/db";
 import { sendDailyAgendaEmail } from "@/lib/email";
 import { runTeamDigests } from "@/lib/digest";
 
 /**
- * Morning agenda digests. Meant to be hit hourly by cron (Bearer CRON_SECRET):
+ * Morning agenda digests and housekeeping. Meant to be hit hourly by cron
+ * (Bearer CRON_SECRET):
  * each host whose local time is 07:00 and who has confirmed meetings today
  * gets one email. A settings marker makes the send idempotent per day, so an
  * extra cron run never double-mails anyone.
@@ -31,6 +32,16 @@ export async function GET(req: NextRequest) {
   if (!safeEqual(auth, `Bearer ${secret}`)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Retention: bookings older than BOOKING_RETENTION_MONTHS (default 12)
+  // are deleted on every run. Idempotent and cheap, so no daily marker; the
+  // log carries a count only.
+  try {
+    const purged = purgeOldBookings();
+    if (purged > 0) console.log(`retention: purged ${purged} booking(s)`);
+  } catch (err) {
+    console.error("retention purge failed:", err);
+  }
+
   const force = req.nextUrl.searchParams.get("force") === "1";
   const onlyHost = Number(req.nextUrl.searchParams.get("host")) || null;
   const onlyTeam = Number(req.nextUrl.searchParams.get("team")) || null;

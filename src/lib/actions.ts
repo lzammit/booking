@@ -11,6 +11,7 @@ import db, {
   adminCode,
   adminCodeEnabled,
   Booking,
+  clearBookingNotes,
   EventType,
   Host,
   setSetting,
@@ -514,6 +515,8 @@ export async function cancelBookingAsHost(formData: FormData) {
     if (booking.ms_event_id) await deleteOutlookEvent(host.id, booking.ms_event_id);
     if (booking.webex_meeting_id) await deleteWebexMeeting(host.id, booking.webex_meeting_id);
     await sendBookingEmails({ ...booking, status: "cancelled" }, host, eventType, "cancelled");
+    // Notes and question answers are not needed once the cancellation is out.
+    clearBookingNotes(booking.id);
   }
   revalidatePath("/dashboard");
   redirect("/dashboard");

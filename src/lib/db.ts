@@ -372,6 +372,16 @@ export function deleteOAuthTokens(table: OAuthTable, hostId: number) {
 
 /* ---------- Retention ---------- */
 
+/**
+ * Drop a booking's free text (guest notes plus the question answers folded
+ * into them). Called once the cancellation email has gone out: the row is
+ * kept so the cancel/reschedule links keep resolving and the ICS SEQUENCE
+ * bump can still be issued, but the text has no further use.
+ */
+export function clearBookingNotes(bookingId: number) {
+  db.prepare("UPDATE bookings SET notes = '' WHERE id = ?").run(bookingId);
+}
+
 /** BOOKING_RETENTION_MONTHS from the env, default 12; 0 disables the purge. */
 export function bookingRetentionMonths(): number {
   const raw = process.env.BOOKING_RETENTION_MONTHS;
