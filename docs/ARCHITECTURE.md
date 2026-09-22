@@ -111,8 +111,8 @@ Eight tables (`src/lib/db.ts`). Foreign keys cascade on host deletion.
 | `event_types` | Meeting types per host | `duration_min`, `buffer_min`, `min_notice_min`, `window_days`, `active` |
 | `availability_rules` | Weekly hours | `weekday` (1–7), `start_min`, `end_min` (minutes from midnight, host tz) |
 | `bookings` | The bookings | `guest_name`, `guest_email`, `guest_company`, `guest_timezone`, `start_utc`, `end_utc`, `status`, `cancel_token`, `ms_event_id` |
-| `ms_tokens` | Microsoft 365 OAuth tokens | per host, refresh handled lazily |
-| `webex_tokens` | Webex OAuth tokens | per host, refresh handled lazily |
+| `ms_tokens` | Microsoft 365 OAuth tokens | per host, refresh handled lazily; encrypted when `TOKEN_ENCRYPTION_KEY` is set |
+| `webex_tokens` | Webex OAuth tokens | per host, refresh handled lazily; encrypted when `TOKEN_ENCRYPTION_KEY` is set |
 | `external_busy` | Busy intervals pushed by agents | `source`, `start_utc`, `end_utc` |
 | `agent_syncs` | Agent heartbeat | `source`, `last_sync`, `blocks` (drives the "Connected/Offline" badge) |
 | `settings` | Key/value app settings | `signup_code`, `admin_code`, `admin_code_enabled` |
@@ -245,6 +245,29 @@ types, slug, and all admin operations.
   Signup honors it only when enabled; the admin code always suffices on its own,
   otherwise the regular signup code is enforced.
 - The app process binds to localhost; only Caddy is exposed.
+- **Framing** — every page sends `X-Frame-Options: DENY`, except `/book/*` and
+  `/team/*`, whose `frame-ancestors` is `'self'` plus the origins listed in
+  `EMBED_ALLOWED_ORIGINS` (build-time).
+- **OAuth tokens at rest** — `ms_tokens` / `webex_tokens` secrets are stored
+  AES-256-GCM encrypted (`enc:v1:` prefix, `src/lib/crypto.ts`) when
+  `TOKEN_ENCRYPTION_KEY` is set. Plaintext rows from before the key existed
+  still decrypt (they are passed through) and are rewritten encrypted on their
+  next read.
+
+## Personal data and retention
+
+- A booking stores the guest's name, email, optional company, timezone,
+  locale and free-text notes (question answers are folded into the notes).
+- On cancellation (guest link or host dashboard) the notes are blanked right
+  after the cancellation email is sent. The row stays, with `status =
+  'cancelled'`, so the cancel/reschedule links keep resolving and the
+  calendar cancellation can still be issued.
+- `purgeOldBookings()` (`src/lib/db.ts`) deletes bookings whose `end_utc` is
+  older than `BOOKING_RETENTION_MONTHS` (default 12). It runs on every call to
+  `/api/cron/daily-digest`, so retention depends on that cron being set up.
+  Only a row count is logged.
+- The guest email is not repeated in the Outlook body or Webex agenda; the
+  attendee / invitee field already carries it.
 
 ## Deployment
 

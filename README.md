@@ -48,6 +48,11 @@ time slots colour-coded by time of day](docs/screenshots/event-page.png)
   a booking to a new time; the calendar invite's SEQUENCE is bumped so
   everyone's calendar event moves instead of going stale, connected
   Webex/Outlook meetings are updated, and freed slots reopen automatically.
+  Once the cancellation email is out, the guest's notes and question answers
+  are blanked.
+- **Data retention** — finished bookings are deleted after
+  `BOOKING_RETENTION_MONTHS` (default 12) by the hourly cron route; OAuth
+  tokens can be encrypted at rest with `TOKEN_ENCRYPTION_KEY`.
 - **Internationalized guest experience** — the booking pages, cancel page, and
   the guest's confirmation email follow the visitor's browser language
   (English and French today; adding a language is a dictionary entry in
@@ -155,8 +160,8 @@ Pick whichever fits your setup — they're independent:
 
 Open their link → pick a meeting type → the calendar opens on the first
 available day → pick a time (colour tells you morning / midday / evening) → enter
-name, company, and email → confirm. A confirmation email with a calendar invite
-follows, including a link to cancel.
+name and email (company is optional) → confirm. A confirmation email with a
+calendar invite follows, including a link to cancel.
 
 ![A host's booking page listing their meeting types](docs/screenshots/host-page.png)
 
@@ -190,6 +195,10 @@ required.
 | `MS_TENANT_ID` / `MS_CLIENT_ID` / `MS_CLIENT_SECRET` | | Optional Microsoft 365 (Graph) calendar sync. Superseded in practice by the macOS agent and ICS feed. |
 | `WEBEX_CLIENT_ID` / `WEBEX_CLIENT_SECRET` | | Optional Webex meetings. Register an OAuth integration at developer.webex.com (redirect `<APP_URL>/api/webex/callback`); hosts connect from Settings. A corporate Webex org may require admin approval. |
 | `AGENT_ZIP` | | Path to the prebuilt agent zip served from Settings (default `/opt/booking/agent/BookingAgent.app.zip`). |
+| `CRON_SECRET` | | Bearer token for `/api/cron/daily-digest`. Point an hourly cron at that route; it sends the morning agendas and runs the booking retention purge. Without it the route answers 503 and nothing is purged. |
+| `BOOKING_RETENTION_MONTHS` | | How long finished bookings are kept before the cron route deletes them (guest name, email, company, notes included). Default `12`; `0` disables the purge. |
+| `TOKEN_ENCRYPTION_KEY` | | Encrypts Microsoft 365 and Webex OAuth tokens at rest (AES-256-GCM). Generate with `openssl rand -hex 32`. Unset = tokens stored in clear, with a one-time warning in the log. Rows written before the key was set are re-encrypted the next time they are read. Changing the key later invalidates existing tokens; hosts then reconnect from Settings. |
+| `EMBED_ALLOWED_ORIGINS` | | Space-separated origins allowed to embed `/book/*` and `/team/*` in an iframe, e.g. `https://support.example.com https://intranet.example.net`. Unset = same origin only. Read at build time: rerun `npm run build` after changing it. |
 
 See [`.env.example`](.env.example) for a copyable template.
 
