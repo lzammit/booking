@@ -401,6 +401,8 @@ export async function sendBookingEmails(
     .setZone(host.timezone)
     .toFormat("cccc, LLLL d yyyy 'at' h:mm a (ZZZZ)");
   const cancelUrl = `${APP_URL}/cancel/${booking.cancel_token}`;
+  // Every guest email ends with the privacy policy link, in the guest's language.
+  const privacyLine = tr(guestLocale, "mail_privacyLink", { url: `${APP_URL}/privacy` });
   const joinLine = booking.webex_link ? `\nJoin Webex: ${booking.webex_link}` : "";
   const guestJoinLine = booking.webex_link
     ? `\n${tr(guestLocale, "mail_join", { link: booking.webex_link })}`
@@ -441,8 +443,8 @@ export async function sendBookingEmails(
             : tr(guestLocale, "mail_cancelledSubject", { what: subjectBase }),
       text:
         kind === "cancelled"
-          ? `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_cancelledBody")}\n\n${tr(guestLocale, "mail_whatPlain", { what: subjectBase })}\n${tr(guestLocale, "mail_when", { when: startGuest })}\n`
-          : `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, kind === "rescheduled" ? "mail_rescheduledBody" : "mail_confirmedBody")}\n\n${tr(guestLocale, "mail_what", { what: subjectBase, min: eventType.duration_min })}\n${tr(guestLocale, "mail_when", { when: startGuest })}${guestJoinLine}\n\n${tr(guestLocale, "mail_cancelLink", { url: cancelUrl })}\n`,
+          ? `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_cancelledBody")}\n\n${tr(guestLocale, "mail_whatPlain", { what: subjectBase })}\n${tr(guestLocale, "mail_when", { when: startGuest })}\n\n${privacyLine}\n`
+          : `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, kind === "rescheduled" ? "mail_rescheduledBody" : "mail_confirmedBody")}\n\n${tr(guestLocale, "mail_what", { what: subjectBase, min: eventType.duration_min })}\n${tr(guestLocale, "mail_when", { when: startGuest })}${guestJoinLine}\n\n${tr(guestLocale, "mail_cancelLink", { url: cancelUrl })}\n\n${privacyLine}\n`,
       alternatives: icsFor(
         subjectBase,
         { name: host.name, email: host.email },
