@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Locale, t } from "@/lib/i18n";
 
 /**
@@ -102,6 +102,18 @@ export default function BookingWidget({
   const [confirmed, setConfirmed] = useState<{ start: string; host?: string } | null>(
     null
   );
+  const uid = useId();
+  const formHeadingRef = useRef<HTMLHeadingElement>(null);
+  const confirmHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // Focus follows the panel swap so keyboard and screen-reader users land on
+  // the new step instead of staying on a button that has just unmounted.
+  useEffect(() => {
+    if (selectedSlot && !confirmed) formHeadingRef.current?.focus();
+  }, [selectedSlot, confirmed]);
+  useEffect(() => {
+    if (confirmed) confirmHeadingRef.current?.focus();
+  }, [confirmed]);
 
   const loadMonth = useCallback(async () => {
     setSlots(null);
@@ -182,6 +194,27 @@ export default function BookingWidget({
     return circadian(p.hour + p.minute / 60);
   };
 
+  const todayYmd = ymd(today);
+  /** Full localized date for a yyyy-MM-dd calendar day (accessible names). */
+  const dayLabel = (day: string) =>
+    new Intl.DateTimeFormat(locale, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(day + "T12:00:00Z"));
+  /** Full localized date + time of a slot in the chosen zone (accessible names). */
+  const slotLabel = (iso: string) =>
+    new Date(iso).toLocaleString(locale, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: tz,
+    });
+
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedSlot) return;
@@ -228,7 +261,13 @@ export default function BookingWidget({
     return (
       <div className="max-w-md rounded-2xl border border-ink/10 bg-white p-8">
         <div className="day-arc w-full" />
-        <h2 className="mt-6 text-2xl font-semibold text-ink">{t(locale, rescheduleToken ? "rescheduledTitle" : "booked")}</h2>
+        <h2
+          ref={confirmHeadingRef}
+          tabIndex={-1}
+          className="mt-6 text-2xl font-semibold text-ink outline-none"
+        >
+          {t(locale, rescheduleToken ? "rescheduledTitle" : "booked")}
+        </h2>
         <p className="mt-3 flex items-center gap-2 font-mono text-sm text-ink">
           <span
             aria-hidden
@@ -245,7 +284,7 @@ export default function BookingWidget({
           })}
         </p>
         {tz !== hostTimezone && (
-          <p className="mt-1 font-mono text-xs text-ink/50">
+          <p className="mt-1 font-mono text-xs text-ink/70">
             {t(locale, "forHost", { time: timeLabel(confirmed.start, hostTimezone), host: hostName })} ({hostTimezone})
           </p>
         )}
@@ -254,12 +293,18 @@ export default function BookingWidget({
             {t(locale, "teamAssigned", { name: confirmed.host })}
           </p>
         )}
-        <p className="mt-2 text-sm text-ink/60">
+        <p className="mt-2 text-sm text-ink/70">
           {t(locale, "bookedLine", { min: durationMin, host: hostName, tz })}
         </p>
       </div>
     );
   }
+
+  const tzLabelId = `${uid}-tz`;
+  const fieldId = (name: string) => `${uid}-${name}`;
+  const inputClass =
+    "w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm text-ink";
+  const labelClass = "block text-sm text-ink";
 
   return (
     <div className="grid gap-10 md:grid-cols-[1fr_280px]">
@@ -275,7 +320,10 @@ export default function BookingWidget({
           >
             ←
           </button>
-          <div className="font-mono text-sm font-medium uppercase tracking-[0.15em] text-ink">
+          <div
+            className="font-mono text-sm font-medium uppercase tracking-[0.15em] text-ink"
+            aria-live="polite"
+          >
             {monthLabel}
           </div>
           <button
@@ -290,10 +338,11 @@ export default function BookingWidget({
           </button>
         </div>
         <table className="w-full text-center text-sm">
+          <caption className="sr-only">{monthLabel}</caption>
           <thead>
-            <tr className="font-mono text-[11px] uppercase text-ink/40">
+            <tr className="font-mono text-[11px] uppercase text-ink/70">
               {t(locale, "weekdaysShort").split(",").map((d) => (
-                <th key={d} className="pb-3 font-normal">
+                <th key={d} scope="col" className="pb-3 font-normal">
                   {d}
                 </th>
               ))}
@@ -304,13 +353,24 @@ export default function BookingWidget({
               <tr key={wi}>
                 {week.map((day, di) => {
                   const available = day ? (slotsByDay.get(day)?.length ?? 0) > 0 : false;
+                  const isToday = day === todayYmd;
                   return (
                     <td key={di} className="p-1">
                       {day && (
                         <button
                           type="button"
-                          disabled={!available}
+                          aria-disabled={!available}
+                          aria-pressed={selectedDay === day}
+                          aria-current={isToday ? "date" : undefined}
+                          aria-label={[
+                            dayLabel(day),
+                            isToday ? t(locale, "today") : null,
+                            available ? null : t(locale, "noAvailability"),
+                          ]
+                            .filter(Boolean)
+                            .join(", ")}
                           onClick={() => {
+                            if (!available) return;
                             setSelectedDay(day);
                             setSelectedSlot(null);
                           }}
@@ -319,7 +379,7 @@ export default function BookingWidget({
                               ? "bg-ink text-paper"
                               : available
                                 ? "text-ink ring-1 ring-inset ring-ink/25 hover:ring-ink hover:bg-white"
-                                : "text-ink/20"
+                                : "cursor-default text-ink/40"
                           }`}
                         >
                           {Number(day.slice(-2))}
@@ -332,15 +392,18 @@ export default function BookingWidget({
             ))}
           </tbody>
         </table>
-        {slots === null && (
-          <p className="mt-4 font-mono text-xs uppercase tracking-[0.15em] text-ink/40">
-            {t(locale, "loadingAvailability")}
-          </p>
-        )}
-        <label className="mt-4 flex flex-wrap items-center gap-2 font-mono text-xs text-ink/40">
-          {t(locale, "timesShownIn")}
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-4 min-h-4 font-mono text-xs uppercase tracking-[0.15em] text-ink/70"
+        >
+          {slots === null ? t(locale, "loadingAvailability") : ""}
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-xs text-ink/70">
+          <span id={tzLabelId}>{t(locale, "timesShownIn")}</span>
           <select
             value={tz}
+            aria-labelledby={tzLabelId}
             onChange={(e) => {
               setTz(e.target.value);
               // Day boundaries shift with the zone — re-pick the first open day.
@@ -363,24 +426,25 @@ export default function BookingWidget({
                 setSelectedDay(null);
                 setSelectedSlot(null);
               }}
+              aria-label={t(locale, "backToYourTz", { tz: browserTz.replace(/_/g, " ") })}
               title={t(locale, "backToYourTz", { tz: browserTz.replace(/_/g, " ") })}
-              className="rounded-full border border-ink/15 px-2.5 py-1 text-[11px] uppercase tracking-wide text-ink/60 hover:border-ink hover:text-ink"
+              className="rounded-full border border-ink/15 px-2.5 py-1 text-[11px] uppercase tracking-wide text-ink/70 hover:border-ink hover:text-ink"
             >
               ↺ {t(locale, "reset")}
             </button>
           )}
           {tz !== hostTimezone && (
-            <span className="text-ink/40">
+            <span className="text-ink/70">
               · {hostName}: {hostTimezone.replace(/_/g, " ")}
             </span>
           )}
-        </label>
-        <div className="mt-6 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-ink/50">
-          <span className="h-2 w-2 rounded-full" style={{ background: circadian(8) }} />
+        </div>
+        <div className="mt-6 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-ink/70">
+          <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: circadian(8) }} />
           {t(locale, "morning")}
-          <span className="ml-3 h-2 w-2 rounded-full" style={{ background: circadian(12.5) }} />
+          <span aria-hidden className="ml-3 h-2 w-2 rounded-full" style={{ background: circadian(12.5) }} />
           {t(locale, "midday")}
-          <span className="ml-3 h-2 w-2 rounded-full" style={{ background: circadian(17) }} />
+          <span aria-hidden className="ml-3 h-2 w-2 rounded-full" style={{ background: circadian(17) }} />
           {t(locale, "evening")}
         </div>
       </div>
@@ -388,7 +452,10 @@ export default function BookingWidget({
       <div>
         {selectedDay && !selectedSlot && (
           <div>
-            <h3 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-ink/60">
+            <h3
+              className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-ink/70"
+              aria-label={t(locale, "selectedDayTimes", { date: dayLabel(selectedDay) })}
+            >
               {new Date(selectedDay + "T12:00:00Z").toLocaleDateString(locale, {
                 weekday: "long",
                 month: "long",
@@ -400,17 +467,15 @@ export default function BookingWidget({
               {(slotsByDay.get(selectedDay) ?? []).map((iso, i) => {
                 const c = slotColor(iso);
                 const differs = tz !== hostTimezone;
+                const hintId = `${uid}-slot-${i}-host`;
                 return (
                   <button
                     key={iso}
                     type="button"
                     onClick={() => setSelectedSlot(iso)}
                     style={{ "--slot-i": i } as React.CSSProperties}
-                    title={
-                      differs
-                        ? t(locale, "forHost", { time: timeLabel(iso, hostTimezone), host: hostName }).replace(/^= /, "")
-                        : undefined
-                    }
+                    aria-label={slotLabel(iso)}
+                    aria-describedby={differs ? hintId : undefined}
                     className="slot-cascade group flex w-full items-center gap-3 rounded-lg border border-ink/10 bg-white px-4 py-2.5 text-left font-mono text-sm tabular-nums text-ink transition hover:border-ink"
                   >
                     <span
@@ -420,8 +485,8 @@ export default function BookingWidget({
                     />
                     {timeLabel(iso)}
                     {differs && (
-                      <span className="ml-auto text-xs text-ink/35">
-                        {timeLabel(iso, hostTimezone)}
+                      <span id={hintId} className="ml-auto text-xs text-ink/70">
+                        {t(locale, "forHost", { time: timeLabel(iso, hostTimezone), host: hostName }).replace(/^= /, "")}
                       </span>
                     )}
                   </button>
@@ -429,7 +494,7 @@ export default function BookingWidget({
               })}
             </div>
             {tz !== hostTimezone && (
-              <p className="mt-2 font-mono text-[11px] text-ink/40">
+              <p className="mt-2 font-mono text-[11px] text-ink/70">
                 {t(locale, "greyTime", { host: hostName, zone: hostTimezone.replace(/_/g, " ") })}
               </p>
             )}
@@ -438,7 +503,12 @@ export default function BookingWidget({
 
         {selectedSlot && (
           <form onSubmit={submit} className="space-y-3">
-            <h3 className="flex items-center gap-2 font-mono text-sm font-medium text-ink">
+            <h3
+              ref={formHeadingRef}
+              tabIndex={-1}
+              aria-label={t(locale, "detailsHeading", { when: slotLabel(selectedSlot) })}
+              className="flex items-center gap-2 font-mono text-sm font-medium text-ink outline-none"
+            >
               <span
                 aria-hidden
                 className="h-2.5 w-2.5 rounded-full"
@@ -454,51 +524,91 @@ export default function BookingWidget({
               })}
             </h3>
             {tz !== hostTimezone && (
-              <p className="font-mono text-xs text-ink/50">
+              <p className="font-mono text-xs text-ink/70">
                 {t(locale, "forHost", { time: timeLabel(selectedSlot, hostTimezone), host: hostName })}
               </p>
             )}
             {!rescheduleToken && (
               <>
-                <input
-                  name="name"
-                  required
-                  placeholder={t(locale, "yourName")}
-                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
-                />
-                <input
-                  name="company"
-                  required
-                  placeholder={t(locale, "company")}
-                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
-                />
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  placeholder={t(locale, "yourEmail")}
-                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
-                />
+                <div>
+                  <label htmlFor={fieldId("name")} className={labelClass}>
+                    {t(locale, "yourName")}
+                  </label>
+                  <input
+                    id={fieldId("name")}
+                    name="name"
+                    required
+                    aria-required="true"
+                    autoComplete="name"
+                    maxLength={120}
+                    placeholder={t(locale, "yourName")}
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor={fieldId("email")} className={labelClass}>
+                    {t(locale, "yourEmail")}
+                  </label>
+                  <input
+                    id={fieldId("email")}
+                    name="email"
+                    type="email"
+                    required
+                    aria-required="true"
+                    autoComplete="email"
+                    maxLength={200}
+                    placeholder={t(locale, "yourEmail")}
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor={fieldId("company")} className={labelClass}>
+                    {t(locale, "company")}{" "}
+                    <span className="text-ink/70">({t(locale, "optional")})</span>
+                  </label>
+                  <input
+                    id={fieldId("company")}
+                    name="company"
+                    autoComplete="organization"
+                    maxLength={120}
+                    placeholder={t(locale, "company")}
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
                 {questions.map((q, i) => (
-                  <label key={i} className="block text-sm text-ink/70">
-                    {q}
+                  <div key={i}>
+                    <label htmlFor={fieldId(`answer-${i}`)} className={labelClass}>
+                      {q}
+                    </label>
                     <input
+                      id={fieldId(`answer-${i}`)}
                       name={`answer_${i}`}
                       required
+                      aria-required="true"
                       maxLength={500}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
+                      className={`mt-1 ${inputClass}`}
                     />
-                  </label>
+                  </div>
                 ))}
-                <textarea
-                  name="notes"
-                  rows={3}
-                  placeholder={t(locale, "notesPlaceholder")}
-                  className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm placeholder:text-ink/35"
-                />
+                <div>
+                  <label htmlFor={fieldId("notes")} className={labelClass}>
+                    {t(locale, "notes")}{" "}
+                    <span className="text-ink/70">({t(locale, "optional")})</span>
+                  </label>
+                  <textarea
+                    id={fieldId("notes")}
+                    name="notes"
+                    rows={3}
+                    maxLength={2000}
+                    placeholder={t(locale, "notesPlaceholder")}
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
               </>
             )}
-            {error && <p className="text-sm text-red-700">{error}</p>}
+            <div role="alert" aria-live="assertive">
+              {error && <p className="text-sm text-red-700">{error}</p>}
+            </div>
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -519,7 +629,7 @@ export default function BookingWidget({
         )}
 
         {!selectedDay && (
-          <p className="pt-10 text-sm text-ink/40">
+          <p className="pt-10 text-sm text-ink/70">
             {t(locale, "chooseDay")}
           </p>
         )}
