@@ -132,6 +132,16 @@ const en = {
   mail_when: "When: {when}",
   mail_join: "Join Webex: {link}",
   mail_cancelLink: "Need to reschedule or cancel? {url}",
+  mail_privacyLink: "Privacy policy: {url}",
+  // Footer and legal links
+  footer_nav: "Legal links",
+  footer_legal: "Legal notice",
+  footer_privacy: "Privacy",
+  footer_terms: "Terms",
+  // Booking form consent line; {privacy} and {terms} become links.
+  agreeLine: "By booking you agree to the {privacy} and {terms}.",
+  privacyPolicy: "privacy policy",
+  termsOfUse: "terms of use",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -239,6 +249,14 @@ const fr: Record<MessageKey, string> = {
   mail_when: "Quand : {when}",
   mail_join: "Rejoindre Webex : {link}",
   mail_cancelLink: "Besoin de déplacer ou d’annuler ? {url}",
+  mail_privacyLink: "Politique de confidentialité : {url}",
+  footer_nav: "Liens légaux",
+  footer_legal: "Mentions légales",
+  footer_privacy: "Confidentialité",
+  footer_terms: "Conditions",
+  agreeLine: "En réservant, vous acceptez la {privacy} et les {terms}.",
+  privacyPolicy: "politique de confidentialité",
+  termsOfUse: "conditions d’utilisation",
 };
 
 const dictionaries: Record<Locale, Record<MessageKey, string>> = { en, fr };
