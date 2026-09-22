@@ -11,6 +11,8 @@ import { parseIcsBusy } from "./ics";
  */
 
 const STALE_MINUTES = 15;
+/** How far ahead a polled feed is read; quoted on /privacy. */
+export const FEED_WINDOW_DAYS = 62;
 const SOURCE = "ics-feed";
 /** Earlier deploys stored the Outlook-specific source name. */
 const LEGACY_SOURCES = ["outlook-feed"];
@@ -65,7 +67,7 @@ export async function refreshIcsFeed(hostId: number, url: string): Promise<numbe
   if (!text.includes("BEGIN:VCALENDAR")) throw new Error("Not an ICS calendar");
 
   const windowStart = DateTime.utc().minus({ days: 1 });
-  const windowEnd = DateTime.utc().plus({ days: 62 });
+  const windowEnd = DateTime.utc().plus({ days: FEED_WINDOW_DAYS });
   // All-day events carry no timezone — interpret their day boundaries in the
   // host's timezone so e.g. a day off blocks that host's actual day.
   const hostRow = db.prepare("SELECT timezone FROM hosts WHERE id = ?").get(hostId) as

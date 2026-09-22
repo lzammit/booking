@@ -7,6 +7,11 @@ export interface SessionData {
   hostId?: number;
 }
 
+/** The one cookie this site sets, and only for logged-in hosts. */
+export const SESSION_COOKIE_NAME = "booking_session";
+/** Session lifetime; quoted on /privacy, so keep it in sync with ttl below. */
+export const SESSION_TTL_DAYS = 14;
+
 const sessionPassword = process.env.SESSION_SECRET;
 if (!sessionPassword || sessionPassword.length < 32) {
   throw new Error("SESSION_SECRET env var must be set (32+ chars)");
@@ -16,8 +21,8 @@ export async function getSession(): Promise<IronSession<SessionData>> {
   const cookieStore = await cookies();
   return getIronSession<SessionData>(cookieStore, {
     password: sessionPassword as string,
-    cookieName: "booking_session",
-    ttl: 60 * 60 * 24 * 14,
+    cookieName: SESSION_COOKIE_NAME,
+    ttl: 60 * 60 * 24 * SESSION_TTL_DAYS,
     cookieOptions: {
       // Secure cookies only once the app is actually served over HTTPS.
       secure: (process.env.APP_URL || "").startsWith("https://"),
