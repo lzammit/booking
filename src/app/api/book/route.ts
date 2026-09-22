@@ -16,7 +16,8 @@ const bookSchema = z.object({
   teamEventTypeId: z.number().int().optional(),
   start: z.string(),
   name: z.string().min(1).max(120).transform(cleanText).refine((s) => s.length > 0),
-  company: z.string().min(1).max(120).transform(cleanText).refine((s) => s.length > 0),
+  // Optional: nothing in the flow depends on it (data minimisation).
+  company: z.string().max(120).transform(cleanText).default(""),
   email: z.string().email().max(200),
   notes: z.string().max(2000).transform(cleanText).default(""),
   // Answers to the event type's booking questions, aligned by index.
@@ -112,6 +113,10 @@ export async function POST(req: NextRequest) {
     .join("\n");
   const notes = qa ? (input.notes ? `${qa}\n\n${input.notes}` : qa) : input.notes;
 
+  // Who booked, for the host's calendar entries. The guest's email is not
+  // repeated here: it already travels as the event's attendee / invitee.
+  const guestLabel = input.company ? `${input.name} (${input.company})` : input.name;
+
   const cancelToken = randomBytes(24).toString("hex");
   const res = db
     .prepare(
@@ -141,7 +146,7 @@ export async function POST(req: NextRequest) {
   const webex = await createWebexMeeting({
     hostId: host.id,
     title: `${eventType.name} — ${host.name} / ${input.name}`,
-    agenda: `${notes ? notes + "\n\n" : ""}Guest: ${input.name} (${input.company}) <${input.email}>`,
+    agenda: `${notes ? notes + "\n\n" : ""}Guest: ${guestLabel}`,
     startUtc: startIso,
     endUtc: endIso,
     guestEmail: input.email,
@@ -163,8 +168,8 @@ export async function POST(req: NextRequest) {
 
   const msEventId = await createOutlookEvent({
     hostId: host.id,
-    subject: `${input.company} - ${input.name}`,
-    body: `${notes ? notes + "\n\n" : ""}${booking.webex_link ? `Join Webex: ${booking.webex_link}\n\n` : ""}Booked via ${process.env.APP_URL || "booking app"}. Guest: ${input.name} (${input.company}) <${input.email}>`,
+    subject: input.company ? `${input.company} - ${input.name}` : input.name,
+    body: `${notes ? notes + "\n\n" : ""}${booking.webex_link ? `Join Webex: ${booking.webex_link}\n\n` : ""}Booked via ${process.env.APP_URL || "booking app"}. Guest: ${guestLabel}`,
     startUtc: startIso,
     endUtc: endIso,
     guestName: input.name,

@@ -577,7 +577,7 @@ export async function reassignTeamBooking(formData: FormData) {
     const webex = await createWebexMeeting({
       hostId: target!.id,
       title: `${tet!.name} — ${target!.name} / ${booking!.guest_name}`,
-      agenda: `${booking!.notes ? booking!.notes + "\n\n" : ""}Guest: ${booking!.guest_name} (${booking!.guest_company}) <${booking!.guest_email}>`,
+      agenda: `${booking!.notes ? booking!.notes + "\n\n" : ""}Guest: ${booking!.guest_name}${booking!.guest_company ? ` (${booking!.guest_company})` : ""}`,
       startUtc: booking!.start_utc,
       endUtc: booking!.end_utc,
       guestEmail: booking!.guest_email,
