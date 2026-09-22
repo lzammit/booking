@@ -1,5 +1,12 @@
 import { DateTime, Interval } from "luxon";
-import db, { getSetting } from "./db";
+import {
+  deleteOAuthTokens,
+  getOAuthTokens,
+  getSetting,
+  oauthAccountFor,
+  saveOAuthTokens,
+  updateOAuthTokens,
+} from "./db";
 
 /**
  * Microsoft 365 calendar integration via Microsoft Graph.
@@ -46,14 +53,6 @@ export function msAuthUrl(state: string): string {
   return `https://login.microsoftonline.com/${tenant()}/oauth2/v2.0/authorize?${params}`;
 }
 
-interface TokenRow {
-  host_id: number;
-  account_email: string;
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-}
-
 async function tokenRequest(body: Record<string, string>) {
   const res = await fetch(
     `https://login.microsoftonline.com/${tenant()}/oauth2/v2.0/token`,
@@ -97,37 +96,26 @@ export async function msExchangeCode(hostId: number, code: string) {
   } catch {
     /* display-only */
   }
-  db.prepare(
-    `INSERT INTO ms_tokens (host_id, account_email, access_token, refresh_token, expires_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(host_id) DO UPDATE SET account_email=excluded.account_email,
-       access_token=excluded.access_token, refresh_token=excluded.refresh_token,
-       expires_at=excluded.expires_at`
-  ).run(
-    hostId,
-    email,
-    tokens.access_token,
-    tokens.refresh_token ?? "",
-    Math.floor(Date.now() / 1000) + tokens.expires_in
-  );
+  saveOAuthTokens("ms_tokens", {
+    host_id: hostId,
+    account_email: email,
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token ?? "",
+    expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
+  });
 }
 
 export function msAccountFor(hostId: number): string | null {
-  const row = db
-    .prepare("SELECT account_email FROM ms_tokens WHERE host_id = ?")
-    .get(hostId) as { account_email: string } | undefined;
-  return row ? row.account_email || "connected" : null;
+  return oauthAccountFor("ms_tokens", hostId);
 }
 
 export function msDisconnect(hostId: number) {
-  db.prepare("DELETE FROM ms_tokens WHERE host_id = ?").run(hostId);
+  deleteOAuthTokens("ms_tokens", hostId);
 }
 
 async function getAccessToken(hostId: number): Promise<string | null> {
   if (!msConfigured()) return null;
-  const row = db
-    .prepare("SELECT * FROM ms_tokens WHERE host_id = ?")
-    .get(hostId) as TokenRow | undefined;
+  const row = getOAuthTokens("ms_tokens", hostId);
   if (!row) return null;
   if (row.expires_at > Math.floor(Date.now() / 1000) + 60) {
     return row.access_token;
@@ -137,14 +125,11 @@ async function getAccessToken(hostId: number): Promise<string | null> {
       grant_type: "refresh_token",
       refresh_token: row.refresh_token,
     });
-    db.prepare(
-      "UPDATE ms_tokens SET access_token=?, refresh_token=?, expires_at=? WHERE host_id=?"
-    ).run(
-      tokens.access_token,
-      tokens.refresh_token ?? row.refresh_token,
-      Math.floor(Date.now() / 1000) + tokens.expires_in,
-      hostId
-    );
+    updateOAuthTokens("ms_tokens", hostId, {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token ?? row.refresh_token,
+      expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
+    });
     return tokens.access_token;
   } catch (err) {
     console.error(`MS token refresh failed for host ${hostId}:`, err);

@@ -1,4 +1,11 @@
-import db, { getSetting } from "./db";
+import {
+  deleteOAuthTokens,
+  getOAuthTokens,
+  getSetting,
+  oauthAccountFor,
+  saveOAuthTokens,
+  updateOAuthTokens,
+} from "./db";
 
 /**
  * Cisco Webex meeting integration.
@@ -48,14 +55,6 @@ export function webexAuthUrl(state: string): string {
   return `${API}/authorize?${params}`;
 }
 
-interface TokenRow {
-  host_id: number;
-  account_email: string;
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-}
-
 async function tokenRequest(body: Record<string, string>) {
   const res = await fetch(`${API}/access_token`, {
     method: "POST",
@@ -94,37 +93,26 @@ export async function webexExchangeCode(hostId: number, code: string) {
   } catch {
     /* display-only */
   }
-  db.prepare(
-    `INSERT INTO webex_tokens (host_id, account_email, access_token, refresh_token, expires_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(host_id) DO UPDATE SET account_email=excluded.account_email,
-       access_token=excluded.access_token, refresh_token=excluded.refresh_token,
-       expires_at=excluded.expires_at`
-  ).run(
-    hostId,
-    email,
-    tokens.access_token,
-    tokens.refresh_token ?? "",
-    Math.floor(Date.now() / 1000) + tokens.expires_in
-  );
+  saveOAuthTokens("webex_tokens", {
+    host_id: hostId,
+    account_email: email,
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token ?? "",
+    expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
+  });
 }
 
 export function webexAccountFor(hostId: number): string | null {
-  const row = db
-    .prepare("SELECT account_email FROM webex_tokens WHERE host_id = ?")
-    .get(hostId) as { account_email: string } | undefined;
-  return row ? row.account_email || "connected" : null;
+  return oauthAccountFor("webex_tokens", hostId);
 }
 
 export function webexDisconnect(hostId: number) {
-  db.prepare("DELETE FROM webex_tokens WHERE host_id = ?").run(hostId);
+  deleteOAuthTokens("webex_tokens", hostId);
 }
 
 async function getAccessToken(hostId: number): Promise<string | null> {
   if (!webexConfigured()) return null;
-  const row = db
-    .prepare("SELECT * FROM webex_tokens WHERE host_id = ?")
-    .get(hostId) as TokenRow | undefined;
+  const row = getOAuthTokens("webex_tokens", hostId);
   if (!row) return null;
   if (row.expires_at > Math.floor(Date.now() / 1000) + 60) {
     return row.access_token;
@@ -134,14 +122,11 @@ async function getAccessToken(hostId: number): Promise<string | null> {
       grant_type: "refresh_token",
       refresh_token: row.refresh_token,
     });
-    db.prepare(
-      "UPDATE webex_tokens SET access_token=?, refresh_token=?, expires_at=? WHERE host_id=?"
-    ).run(
-      tokens.access_token,
-      tokens.refresh_token ?? row.refresh_token,
-      Math.floor(Date.now() / 1000) + tokens.expires_in,
-      hostId
-    );
+    updateOAuthTokens("webex_tokens", hostId, {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token ?? row.refresh_token,
+      expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
+    });
     return tokens.access_token;
   } catch (err) {
     console.error(`Webex token refresh failed for host ${hostId}:`, err);

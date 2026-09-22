@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { randomBytes } from "crypto";
 import path from "path";
 import fs from "fs";
+import { decryptSecret, encryptSecret, isLegacyPlaintext } from "./crypto";
 
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
@@ -279,6 +280,119 @@ export function setSetting(key: string, value: string) {
   db.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
   ).run(key, value);
+}
+
+/* ---------- OAuth token storage (ms_tokens / webex_tokens) ---------- */
+
+export type OAuthTable = "ms_tokens" | "webex_tokens";
+
+export interface OAuthTokens {
+  host_id: number;
+  account_email: string;
+  access_token: string;
+  refresh_token: string;
+  expires_at: number; // unix seconds
+}
+
+/**
+ * Upsert a host's tokens, encrypted at rest when TOKEN_ENCRYPTION_KEY is set
+ * (see lib/crypto.ts). Both integrations share this so the encryption logic
+ * lives in exactly one place.
+ */
+export function saveOAuthTokens(
+  table: OAuthTable,
+  row: Omit<OAuthTokens, "account_email"> & { account_email?: string }
+) {
+  db.prepare(
+    `INSERT INTO ${table} (host_id, account_email, access_token, refresh_token, expires_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(host_id) DO UPDATE SET account_email=excluded.account_email,
+       access_token=excluded.access_token, refresh_token=excluded.refresh_token,
+       expires_at=excluded.expires_at`
+  ).run(
+    row.host_id,
+    row.account_email ?? "",
+    encryptSecret(row.access_token),
+    encryptSecret(row.refresh_token),
+    row.expires_at
+  );
+}
+
+/** Replace the secrets after a refresh; account_email is untouched. */
+export function updateOAuthTokens(
+  table: OAuthTable,
+  hostId: number,
+  tokens: { access_token: string; refresh_token: string; expires_at: number }
+) {
+  db.prepare(
+    `UPDATE ${table} SET access_token=?, refresh_token=?, expires_at=? WHERE host_id=?`
+  ).run(
+    encryptSecret(tokens.access_token),
+    encryptSecret(tokens.refresh_token),
+    tokens.expires_at,
+    hostId
+  );
+}
+
+/**
+ * A host's tokens, decrypted. Rows written before encryption was switched on
+ * are returned as-is and re-encrypted in place on the way out, so a running
+ * server converges to ciphertext without a migration step.
+ */
+export function getOAuthTokens(table: OAuthTable, hostId: number): OAuthTokens | null {
+  const row = db.prepare(`SELECT * FROM ${table} WHERE host_id = ?`).get(hostId) as
+    | OAuthTokens
+    | undefined;
+  if (!row) return null;
+  const plain: OAuthTokens = {
+    ...row,
+    access_token: decryptSecret(row.access_token),
+    refresh_token: decryptSecret(row.refresh_token),
+  };
+  if (
+    process.env.TOKEN_ENCRYPTION_KEY &&
+    (isLegacyPlaintext(row.access_token) || isLegacyPlaintext(row.refresh_token))
+  ) {
+    updateOAuthTokens(table, hostId, plain);
+  }
+  return plain;
+}
+
+/** Display-only: the connected account's email, "connected" if unknown, null if none. */
+export function oauthAccountFor(table: OAuthTable, hostId: number): string | null {
+  const row = db
+    .prepare(`SELECT account_email FROM ${table} WHERE host_id = ?`)
+    .get(hostId) as { account_email: string } | undefined;
+  return row ? row.account_email || "connected" : null;
+}
+
+export function deleteOAuthTokens(table: OAuthTable, hostId: number) {
+  db.prepare(`DELETE FROM ${table} WHERE host_id = ?`).run(hostId);
+}
+
+/* ---------- Retention ---------- */
+
+/** BOOKING_RETENTION_MONTHS from the env, default 12; 0 disables the purge. */
+export function bookingRetentionMonths(): number {
+  const raw = process.env.BOOKING_RETENTION_MONTHS;
+  if (raw === undefined || raw === "") return 12;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 12;
+}
+
+/**
+ * Delete bookings (any status) whose end time is more than `months` months in
+ * the past. Guest name, email, company and notes go with the row. Returns the
+ * number of rows removed; callers must log the count only, never the rows.
+ */
+export function purgeOldBookings(months: number = bookingRetentionMonths()): number {
+  if (!(months > 0)) return 0;
+  const cutoff = new Date();
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - months);
+  const res = db
+    .prepare("DELETE FROM bookings WHERE end_utc < ?")
+    .run(cutoff.toISOString());
+  return res.changes;
 }
 
 /** Current signup invite code; empty string means signup is open. */
