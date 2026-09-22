@@ -8,12 +8,12 @@ export default async function Home() {
   const locale = pickLocale((await headers()).get("accept-language"));
   return (
     <main className="flex-1 flex flex-col items-center justify-center gap-6 p-8 text-center">
-      <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/50">
+      <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/70">
         {t(locale, "landing_eyebrow")}
       </p>
       <h1 className="text-5xl font-semibold tracking-tight text-ink">Booking</h1>
       <div className="day-arc w-24" />
-      <p className="max-w-md text-ink/60">{t(locale, "landing_tagline")}</p>
+      <p className="max-w-md text-ink/70">{t(locale, "landing_tagline")}</p>
       <div className="flex gap-3">
         {host ? (
           <Link

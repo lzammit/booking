@@ -37,6 +37,25 @@ body {
   background: linear-gradient(90deg, var(--dawn), var(--noon), var(--dusk));
 }
 
+/* Placeholder text at 70% ink: 4.5:1+ on both paper and white (WCAG AA). */
+::placeholder {
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  opacity: 1;
+}
+
+/* Visually hidden, still read by assistive tech (table captions etc.). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 ::selection {
   background: var(--noon);
   color: var(--ink);

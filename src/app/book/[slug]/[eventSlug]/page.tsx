@@ -26,17 +26,17 @@ export default async function EventBookingPage({
     <main className="flex-1 mx-auto w-full max-w-3xl px-6 py-14">
       <Link
         href={`/book/${host.slug}`}
-        className="font-mono text-xs uppercase tracking-[0.15em] text-ink/50 hover:text-ink"
+        className="font-mono text-xs uppercase tracking-[0.15em] text-ink/70 hover:text-ink"
       >
         ← {t(locale, "allMeetingTypes")}
       </Link>
-      <p className="mt-5 font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/50">
+      <p className="mt-5 font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/70">
         {host.name}
       </p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">
         {eventType.name}
       </h1>
-      <p className="mt-1 text-ink/60">
+      <p className="mt-1 text-ink/70">
         <span className="font-mono tabular-nums">
           {eventType.duration_min} {t(locale, "min")}
         </span>
