@@ -3,6 +3,10 @@ import { headers } from "next/headers";
 import { requestPasswordReset } from "@/lib/actions";
 import { pickLocale, t } from "@/lib/i18n";
 
+// Private or token-bearing page: keep it out of every index.
+export const metadata = { robots: { index: false, follow: false } };
+
+
 export default async function ForgotPage({
   searchParams,
 }: {

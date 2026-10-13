@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -5,6 +6,24 @@ import db, { TeamEventType } from "@/lib/db";
 import { teamBySlug, teamMembers } from "@/lib/teams";
 import { pickLocale, t } from "@/lib/i18n";
 import SiteFooter from "@/app/SiteFooter";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const team = teamBySlug(slug);
+  if (!team) return {};
+  const title = `Book time with ${team.name}`;
+  const description = `Pick a meeting and a time — you'll be matched with an available member of ${team.name}, confirmed instantly with an email invite and join link.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/team/${team.slug}` },
+    openGraph: { title, description, url: `/team/${team.slug}` },
+  };
+}
 
 export default async function TeamPage({
   params,
@@ -22,8 +41,27 @@ export default async function TeamPage({
     )
     .all(team.id) as TeamEventType[];
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: team.name,
+    url: `${process.env.APP_URL}/team/${team.slug}`,
+    makesOffer: eventTypes.map((et) => ({
+      "@type": "Offer",
+      name: et.name,
+      description:
+        et.description ||
+        `${et.duration_min} minute meeting with an available member of ${team.name}`,
+      url: `${process.env.APP_URL}/team/${team.slug}/${et.slug}`,
+    })),
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <main className="flex-1 mx-auto w-full max-w-xl px-6 py-20">
         <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/70">
           {t(locale, "bookTimeWith")}

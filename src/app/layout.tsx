@@ -15,9 +15,22 @@ const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
 });
 
+const APP_URL = process.env.APP_URL || "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "Booking",
-  description: "Simple meeting scheduling",
+  metadataBase: new URL(APP_URL),
+  title: {
+    default: "Booking — PacketFence meeting scheduling",
+    template: "%s · Booking",
+  },
+  description:
+    "Book meetings with the PacketFence team: pick a time that fits both calendars, get a confirmed invite with a join link. No account needed.",
+  openGraph: {
+    siteName: "Booking",
+    type: "website",
+    locale: "en_US",
+  },
+  robots: { index: true, follow: true },
 };
 
 export default async function RootLayout({

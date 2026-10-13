@@ -9,6 +9,10 @@ import { getSession } from "@/lib/session";
 import { hostFreeReschedule } from "@/lib/actions";
 import BookingWidget from "../../book/[slug]/[eventSlug]/BookingWidget";
 
+// Private or token-bearing page: keep it out of every index.
+export const metadata = { robots: { index: false, follow: false } };
+
+
 export default async function ReschedulePage({
   params,
 }: {

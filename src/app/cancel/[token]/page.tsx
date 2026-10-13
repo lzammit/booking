@@ -9,6 +9,10 @@ import { deleteWebexMeeting } from "@/lib/webex";
 import { pickLocale, t } from "@/lib/i18n";
 import SiteFooter from "@/app/SiteFooter";
 
+// Private or token-bearing page: keep it out of every index.
+export const metadata = { robots: { index: false, follow: false } };
+
+
 async function cancelAction(formData: FormData) {
   "use server";
   const token = String(formData.get("token") || "");

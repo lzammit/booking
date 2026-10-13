@@ -1,7 +1,34 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { headers } from "next/headers";
 import db, { EventType, hostBySlug, questionList } from "@/lib/db";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; eventSlug: string }>;
+}): Promise<Metadata> {
+  const { slug, eventSlug } = await params;
+  const resolved = hostBySlug(slug);
+  if (!resolved) return {};
+  const et = db
+    .prepare("SELECT name, description, duration_min FROM event_types WHERE host_id = ? AND slug = ? AND active = 1")
+    .get(resolved.host.id, eventSlug) as
+    | { name: string; description: string; duration_min: number }
+    | undefined;
+  if (!et) return {};
+  const title = `${et.name} — ${resolved.host.name}`;
+  const description =
+    et.description ||
+    `Book a ${et.duration_min} minute meeting with ${resolved.host.name}. Pick any open slot; confirmation and calendar invite arrive by email.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/book/${resolved.host.slug}/${eventSlug}` },
+    openGraph: { title, description, url: `/book/${resolved.host.slug}/${eventSlug}` },
+  };
+}
 import { pickLocale, t } from "@/lib/i18n";
 import SiteFooter from "@/app/SiteFooter";
 import BookingWidget from "./BookingWidget";

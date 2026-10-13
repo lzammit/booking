@@ -5,6 +5,10 @@ import { signupCode } from "@/lib/db";
 import { pickLocale, t } from "@/lib/i18n";
 import TimezoneField from "./TimezoneField";
 
+// Private or token-bearing page: keep it out of every index.
+export const metadata = { robots: { index: false, follow: false } };
+
+
 export default async function SignupPage({
   searchParams,
 }: {

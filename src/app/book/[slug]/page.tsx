@@ -1,8 +1,28 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import db, { EventType, hostBySlug } from "@/lib/db";
 import { pickLocale, t } from "@/lib/i18n";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const resolved = hostBySlug(slug);
+  if (!resolved) return {};
+  const { host } = resolved;
+  const title = `Book time with ${host.name}`;
+  const description = `Pick a meeting with ${host.name} and a time that fits your calendar — confirmed instantly with an email invite and join link.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/book/${host.slug}` },
+    openGraph: { title, description, url: `/book/${host.slug}` },
+  };
+}
 import SiteFooter from "@/app/SiteFooter";
 
 export default async function HostPage({
@@ -21,8 +41,26 @@ export default async function HostPage({
     .prepare("SELECT * FROM event_types WHERE host_id = ? AND active = 1 ORDER BY duration_min")
     .all(host.id) as EventType[];
 
+  // schema.org structured data for search engines and AI crawlers.
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: host.name,
+    url: `${process.env.APP_URL}/book/${host.slug}`,
+    makesOffer: eventTypes.map((et) => ({
+      "@type": "Offer",
+      name: et.name,
+      description: et.description || `${et.duration_min} minute meeting with ${host.name}`,
+      url: `${process.env.APP_URL}/book/${host.slug}/${et.slug}`,
+    })),
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <main className="flex-1 mx-auto w-full max-w-xl px-6 py-20">
         <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-ink/70">
           {t(locale, "bookTimeWith")}

@@ -2,6 +2,10 @@ import Link from "next/link";
 import { requireHost } from "@/lib/session";
 import { logout } from "@/lib/actions";
 
+// Private or token-bearing page: keep it out of every index.
+export const metadata = { robots: { index: false, follow: false } };
+
+
 export default async function DashboardLayout({
   children,
 }: {

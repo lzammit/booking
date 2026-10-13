@@ -1,7 +1,34 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import db, { questionList, TeamEventType } from "@/lib/db";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; eventSlug: string }>;
+}): Promise<Metadata> {
+  const { slug, eventSlug } = await params;
+  const team = teamBySlug(slug);
+  if (!team) return {};
+  const et = db
+    .prepare("SELECT name, description, duration_min FROM team_event_types WHERE team_id = ? AND slug = ? AND active = 1")
+    .get(team.id, eventSlug) as
+    | { name: string; description: string; duration_min: number }
+    | undefined;
+  if (!et) return {};
+  const title = `${et.name} — ${team.name}`;
+  const description =
+    et.description ||
+    `Book a ${et.duration_min} minute meeting with ${team.name} — an available member takes it. Confirmation and calendar invite arrive by email.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/team/${team.slug}/${eventSlug}` },
+    openGraph: { title, description, url: `/team/${team.slug}/${eventSlug}` },
+  };
+}
 import { teamBySlug, teamMembers } from "@/lib/teams";
 import { pickLocale, t } from "@/lib/i18n";
 import SiteFooter from "@/app/SiteFooter";
