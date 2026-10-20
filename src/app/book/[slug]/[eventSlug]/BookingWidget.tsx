@@ -26,6 +26,14 @@ interface Props {
   questions?: string[];
   /** When set, the widget moves an existing booking instead of creating one. */
   rescheduleToken?: string;
+  /**
+   * Timezone the widget starts in. On reschedule this is the GUEST's stored
+   * zone — without it the widget opens in the viewer's browser zone, and a
+   * host rescheduling from the dashboard silently rewrote the guest's
+   * timezone (UK clients stamped America/Toronto → emails with times they
+   * misread → missed meetings).
+   */
+  initialTz?: string;
 }
 
 const DAWN: [number, number, number] = [240, 152, 126]; // 06:00
@@ -77,17 +85,28 @@ export default function BookingWidget({
   locale,
   questions = [],
   rescheduleToken,
+  initialTz,
 }: Props) {
   const browserTz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     []
   );
-  const [tz, setTz] = useState(browserTz);
+  const [tz, setTz] = useState(() => {
+    if (initialTz) {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: initialTz });
+        return initialTz;
+      } catch {
+        /* fall through to the browser zone */
+      }
+    }
+    return browserTz;
+  });
   const zones = useMemo(() => {
     try {
       return Intl.supportedValuesOf("timeZone");
     } catch {
-      return [...new Set([browserTz, hostTimezone, "UTC"])];
+      return [...new Set([browserTz, hostTimezone, ...(initialTz ? [initialTz] : []), "UTC"])];
     }
   }, [browserTz, hostTimezone]);
   const today = useMemo(() => new Date(), []);

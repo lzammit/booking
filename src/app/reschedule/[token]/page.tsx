@@ -107,6 +107,7 @@ export default async function ReschedulePage({
             hostTimezone={host.timezone}
             locale={locale}
             rescheduleToken={token}
+            initialTz={booking.guest_timezone}
           />
         </div>
       </main>

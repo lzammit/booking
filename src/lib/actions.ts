@@ -628,7 +628,7 @@ export async function hostFreeReschedule(formData: FormData) {
   const endIso = start.plus({ minutes: eventType.duration_min }).toUTC().toISO()!;
 
   db.prepare(
-    "UPDATE bookings SET start_utc = ?, end_utc = ?, sequence = sequence + 1 WHERE id = ?"
+    "UPDATE bookings SET start_utc = ?, end_utc = ?, sequence = sequence + 1, reminder_sent = 0 WHERE id = ?"
   ).run(startIso, endIso, booking!.id);
   const updated = db.prepare("SELECT * FROM bookings WHERE id = ?").get(booking!.id) as Booking;
 
@@ -644,7 +644,9 @@ export async function hostFreeReschedule(formData: FormData) {
   if (updated.ms_event_id) {
     await updateOutlookEvent(host.id, updated.ms_event_id, startIso, endIso);
   }
-  await sendBookingEmails(updated, host, eventType, "rescheduled");
+  await sendBookingEmails(updated, host, eventType, "rescheduled", {
+    previousStartUtc: booking!.start_utc,
+  });
 
   // Not a blocker, but worth surfacing: does the new time collide?
   const conflicts =

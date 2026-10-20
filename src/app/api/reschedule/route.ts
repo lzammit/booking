@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import db, { Booking, EventType, Host } from "@/lib/db";
 import { isSlotFree } from "@/lib/slots";
+import { getSession } from "@/lib/session";
 import { sendBookingEmails } from "@/lib/email";
 import { updateOutlookEvent } from "@/lib/msgraph";
 import { updateWebexMeeting } from "@/lib/webex";
@@ -72,17 +73,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  let tzOk = input.timezone ?? booking.guest_timezone;
+  // The timezone/locale in the payload describe whoever drove the widget.
+  // When that's the HOST (rescheduling from their dashboard), they must NOT
+  // replace the guest's stored values — that bug stamped hosts' zones onto
+  // foreign clients, whose emails then showed times they misread.
+  const session = await getSession();
+  const hostDriven = session.hostId === booking.host_id;
+  let tzOk = (hostDriven ? booking.guest_timezone : input.timezone) ?? booking.guest_timezone;
   try {
     new Intl.DateTimeFormat("en", { timeZone: tzOk });
   } catch {
     tzOk = booking.guest_timezone;
   }
+  const localeOk = hostDriven ? booking.guest_locale : (input.locale ?? booking.guest_locale);
+  const previousStartUtc = booking.start_utc;
 
   db.prepare(
     `UPDATE bookings SET start_utc = ?, end_utc = ?, sequence = sequence + 1,
-       guest_timezone = ?, guest_locale = ? WHERE id = ?`
-  ).run(startIso, endIso, tzOk, input.locale ?? booking.guest_locale, booking.id);
+       reminder_sent = 0, guest_timezone = ?, guest_locale = ? WHERE id = ?`
+  ).run(startIso, endIso, tzOk, localeOk, booking.id);
   const updated = db
     .prepare("SELECT * FROM bookings WHERE id = ?")
     .get(booking.id) as Booking;
@@ -100,7 +109,7 @@ export async function POST(req: NextRequest) {
   if (updated.ms_event_id) {
     await updateOutlookEvent(host.id, updated.ms_event_id, startIso, endIso);
   }
-  await sendBookingEmails(updated, host, eventType, "rescheduled");
+  await sendBookingEmails(updated, host, eventType, "rescheduled", { previousStartUtc });
 
   return NextResponse.json({ ok: true, start: startIso });
 }

@@ -201,6 +201,10 @@ function createDb() {
     // Set when the booking came through a team page, for the "via <team>" label.
     db.exec("ALTER TABLE bookings ADD COLUMN team_id INTEGER");
   }
+  if (!bookingCols.some((c) => c.name === "reminder_sent")) {
+    // Guest reminder email, sent once when the meeting is <24h away.
+    db.exec("ALTER TABLE bookings ADD COLUMN reminder_sent INTEGER NOT NULL DEFAULT 0");
+  }
   const teamCols = db.prepare("PRAGMA table_info(teams)").all() as { name: string }[];
   if (!teamCols.some((c) => c.name === "require_live_sync")) {
     db.exec("ALTER TABLE teams ADD COLUMN require_live_sync INTEGER NOT NULL DEFAULT 1");
@@ -524,5 +528,6 @@ export interface Booking {
   webex_link: string | null;
   webex_meeting_id: string | null;
   sequence: number;
+  reminder_sent: number;
   created_at: string;
 }

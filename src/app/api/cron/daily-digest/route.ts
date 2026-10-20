@@ -1,8 +1,8 @@
 import { createHash, timingSafeEqual } from "crypto";
 import { DateTime } from "luxon";
 import { NextRequest, NextResponse } from "next/server";
-import db, { Booking, getSetting, Host, purgeOldBookings, setSetting } from "@/lib/db";
-import { sendDailyAgendaEmail } from "@/lib/email";
+import db, { Booking, EventType, getSetting, Host, purgeOldBookings, setSetting } from "@/lib/db";
+import { sendDailyAgendaEmail, sendGuestReminderEmail } from "@/lib/email";
 import { runTeamDigests } from "@/lib/digest";
 
 /**
@@ -93,5 +93,34 @@ export async function GET(req: NextRequest) {
   // single-host debug runs so ?host= tests never spam shared channels.
   const teams = onlyHost ? ["skipped (host filter)"] : await runTeamDigests(force);
 
-  return NextResponse.json({ ok: true, sent, skipped, teams });
+  // Guest reminders: once per booking when the meeting is <24h away. The
+  // reminder_sent flag makes this idempotent across hourly runs; bookings
+  // created in the last hour are skipped (their confirmation just arrived).
+  let reminders = 0;
+  const dueSoon = db
+    .prepare(
+      `SELECT b.*, e.name AS event_name FROM bookings b
+       JOIN event_types e ON e.id = b.event_type_id
+       WHERE b.status = 'confirmed' AND b.reminder_sent = 0
+         AND b.start_utc > ? AND b.start_utc <= ?
+         AND b.created_at < datetime('now', '-1 hour')
+       ORDER BY b.start_utc LIMIT 50`
+    )
+    .all(
+      DateTime.utc().plus({ hours: 1 }).toISO(),
+      DateTime.utc().plus({ hours: 24 }).toISO()
+    ) as (Booking & { event_name: string })[];
+  for (const b of dueSoon) {
+    if (onlyHost && b.host_id !== onlyHost) continue;
+    const bHost = db.prepare("SELECT * FROM hosts WHERE id = ?").get(b.host_id) as Host;
+    const et = db
+      .prepare("SELECT * FROM event_types WHERE id = ?")
+      .get(b.event_type_id) as EventType;
+    if (await sendGuestReminderEmail(b, bHost, et)) {
+      db.prepare("UPDATE bookings SET reminder_sent = 1 WHERE id = ?").run(b.id);
+      reminders++;
+    }
+  }
+
+  return NextResponse.json({ ok: true, sent, skipped, teams, reminders });
 }

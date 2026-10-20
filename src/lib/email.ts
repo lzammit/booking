@@ -268,6 +268,52 @@ function renderDigestHtml(params: {
 </body></html>`;
 }
 
+/**
+ * Guest reminder, sent once when the meeting is under a day away. Exists
+ * because invite updates don't reliably land in every guest's calendar
+ * (Exchange demotes them, some clients ignore them) — this email always
+ * carries the CURRENT time in the guest's own timezone and language.
+ */
+export async function sendGuestReminderEmail(
+  booking: Booking,
+  host: Host,
+  eventType: EventType
+): Promise<boolean> {
+  const t = transport();
+  if (!t) return false;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  const guestLocale: Locale = LOCALES.includes(booking.guest_locale as Locale)
+    ? (booking.guest_locale as Locale)
+    : "en";
+  const when = DateTime.fromISO(booking.start_utc, { zone: "utc" })
+    .setZone(booking.guest_timezone)
+    .setLocale(guestLocale)
+    .toLocaleString({
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
+  const what = `${eventType.name} with ${host.name}`;
+  const joinLine = booking.webex_link
+    ? `\n${tr(guestLocale, "mail_join", { link: booking.webex_link })}`
+    : "";
+  try {
+    await t.sendMail({
+      from,
+      to: booking.guest_email,
+      subject: tr(guestLocale, "mail_reminderSubject", { what, when }),
+      text: `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_reminderBody")}\n\n${tr(guestLocale, "mail_what", { what, min: eventType.duration_min })}\n${tr(guestLocale, "mail_when", { when })}${joinLine}\n\n${tr(guestLocale, "mail_reschedLink", { url: `${APP_URL}/reschedule/${booking.cancel_token}` })}\n${tr(guestLocale, "mail_cancelLink", { url: `${APP_URL}/cancel/${booking.cancel_token}` })}\n`,
+    });
+    return true;
+  } catch (err) {
+    console.error("Guest reminder email failed:", err);
+    return false;
+  }
+}
+
 /** Morning agenda: today's confirmed meetings for one host. Best effort. */
 export async function sendDailyAgendaEmail(
   host: Host,
@@ -373,7 +419,8 @@ export async function sendBookingEmails(
   booking: Booking,
   host: Host,
   eventType: EventType,
-  kind: "confirmed" | "cancelled" | "rescheduled"
+  kind: "confirmed" | "cancelled" | "rescheduled",
+  opts: { previousStartUtc?: string } = {}
 ) {
   const t = transport();
   if (!t) {
@@ -400,6 +447,30 @@ export async function sendBookingEmails(
   const startHost = DateTime.fromISO(booking.start_utc, { zone: "utc" })
     .setZone(host.timezone)
     .toFormat("cccc, LLLL d yyyy 'at' h:mm a (ZZZZ)");
+  // On a reschedule, spell out the OLD time too — if the guest's calendar
+  // didn't auto-apply the updated invite, the email text is all they act on.
+  const prevGuest = opts.previousStartUtc
+    ? DateTime.fromISO(opts.previousStartUtc, { zone: "utc" })
+        .setZone(booking.guest_timezone)
+        .setLocale(guestLocale)
+        .toLocaleString({
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        })
+    : null;
+  const prevHost = opts.previousStartUtc
+    ? DateTime.fromISO(opts.previousStartUtc, { zone: "utc" })
+        .setZone(host.timezone)
+        .toFormat("cccc, LLLL d 'at' h:mm a")
+    : null;
+  const prevGuestLine = prevGuest
+    ? `\n${tr(guestLocale, "mail_previously", { when: prevGuest })}`
+    : "";
   const cancelUrl = `${APP_URL}/cancel/${booking.cancel_token}`;
   // Every guest email ends with the privacy policy link, in the guest's language.
   const privacyLine = tr(guestLocale, "mail_privacyLink", { url: `${APP_URL}/privacy` });
@@ -444,7 +515,7 @@ export async function sendBookingEmails(
       text:
         kind === "cancelled"
           ? `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, "mail_cancelledBody")}\n\n${tr(guestLocale, "mail_whatPlain", { what: subjectBase })}\n${tr(guestLocale, "mail_when", { when: startGuest })}\n\n${privacyLine}\n`
-          : `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, kind === "rescheduled" ? "mail_rescheduledBody" : "mail_confirmedBody")}\n\n${tr(guestLocale, "mail_what", { what: subjectBase, min: eventType.duration_min })}\n${tr(guestLocale, "mail_when", { when: startGuest })}${guestJoinLine}\n\n${tr(guestLocale, "mail_cancelLink", { url: cancelUrl })}\n\n${privacyLine}\n`,
+          : `${tr(guestLocale, "mail_hi", { name: booking.guest_name })}\n\n${tr(guestLocale, kind === "rescheduled" ? "mail_rescheduledBody" : "mail_confirmedBody")}\n\n${tr(guestLocale, "mail_what", { what: subjectBase, min: eventType.duration_min })}\n${tr(guestLocale, "mail_when", { when: startGuest })}${kind === "rescheduled" ? prevGuestLine : ""}${guestJoinLine}\n\n${tr(guestLocale, "mail_cancelLink", { url: cancelUrl })}\n\n${privacyLine}\n`,
       alternatives: icsFor(
         subjectBase,
         { name: host.name, email: host.email },
@@ -465,7 +536,7 @@ export async function sendBookingEmails(
         kind === "confirmed"
           ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> booked "${eventType.name}".\n\nWhen: ${startHost}${joinLine}\nNotes: ${booking.notes || "(none)"}\n`
           : kind === "rescheduled"
-            ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> moved "${eventType.name}".\n\nNew time: ${startHost}${joinLine}\n`
+            ? `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> — "${eventType.name}" moved.\n\nNew time: ${startHost}${prevHost ? `\nWas: ${prevHost}` : ""}${joinLine}\n`
             : `${booking.guest_name} (${booking.guest_company || "no company given"}) <${booking.guest_email}> — booking "${eventType.name}" on ${startHost} was cancelled.\n`,
       alternatives: icsFor(hostSummary, system, { name: host.name, email: host.email }),
       headers: calendarHeaders,
