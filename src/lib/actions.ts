@@ -36,6 +36,7 @@ import { cleanText, clientIp, rateLimit } from "./ratelimit";
 import { shadowEventTypeFor } from "./teams";
 import { isSlotFree } from "./slots";
 import { runTeamDigests } from "./digest";
+import { clearTicketCache, testMantisToken } from "./tickets";
 import type { TeamEventType } from "./db";
 
 /** Constant-time string comparison (via digests, so lengths may differ). */
@@ -888,6 +889,38 @@ export async function adminToggleTeamTicket(formData: FormData) {
     Number(formData.get("id"))
   );
   redirect("/dashboard/admin?saved=1");
+}
+
+/**
+ * Mantis API token, pasted in the admin UI. Write-only: the page never gets
+ * it back. Saved only once Mantis accepts it, so a typo can't silently turn
+ * ticket verification off.
+ */
+export async function adminSaveMantisToken(formData: FormData) {
+  await requireAdmin();
+  const token = String(formData.get("token") || "").trim();
+  const helpUrl = String(formData.get("help_url") || "");
+  if (!/^[\x21-\x7E]{10,200}$/.test(token)) {
+    redirect("/dashboard/admin?mantis=" + encodeURIComponent("That doesn't look like a Mantis API token."));
+  }
+  const test = await testMantisToken(token, helpUrl);
+  if (!test.ok) {
+    redirect("/dashboard/admin?mantis=" + encodeURIComponent(`Not saved. ${test.reason}`));
+  }
+  setSetting("mantis_api_token", token);
+  setSetting("mantis_token_user", test.user);
+  setSetting("mantis_token_saved", new Date().toISOString());
+  clearTicketCache();
+  redirect("/dashboard/admin?mantis=" + encodeURIComponent(`ok:${test.user}`));
+}
+
+export async function adminClearMantisToken() {
+  await requireAdmin();
+  setSetting("mantis_api_token", "");
+  setSetting("mantis_token_user", "");
+  setSetting("mantis_token_saved", "");
+  clearTicketCache();
+  redirect("/dashboard/admin?mantis=" + encodeURIComponent("Token removed. Ticket numbers are format-checked only."));
 }
 
 export async function adminSaveTeamTicketUrl(formData: FormData) {

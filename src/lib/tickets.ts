@@ -1,14 +1,25 @@
 /**
  * Support-ticket gate for team booking pages (MantisBT at help.inverse.ca).
  *
- * A ticket number is always format-checked. When MANTIS_API_TOKEN is set in
- * the server .env, it is also looked up through Mantis' REST API
+ * A ticket number is always format-checked. When a Mantis API token is
+ * configured (Admin > Teams, stored as the mantis_api_token setting; the
+ * MANTIS_API_TOKEN env var still works as a fallback), it is also looked up
+ * through Mantis' REST API
  * (GET /api/rest/issues/<id>), so a made-up number is refused. Mantis being
  * down or slow never blocks a client: an unreachable tracker falls back to
  * the format check, and the host sees "unverified" on the booking.
  */
 
+import { getSetting } from "./db";
+
 export const DEFAULT_TICKET_HELP_URL = "https://help.inverse.ca/";
+
+/** Server-side only. Never send this to a page, not even partially. */
+export function mantisToken(): string {
+  return getSetting("mantis_api_token") || process.env.MANTIS_API_TOKEN || "";
+}
+
+export const mantisConfigured = () => mantisToken() !== "";
 
 export type TicketCheck =
   | { ok: true; id: string; verified: boolean; status?: string; summary?: string }
@@ -36,11 +47,37 @@ export const ticketUrl = (id: string, helpUrl: string) => `${baseUrl(helpUrl)}vi
 const cache = new Map<string, { at: number; result: TicketCheck }>();
 const CACHE_MS = 10 * 60 * 1000;
 
+/** Forget looked-up tickets (after the token changes, answers may differ). */
+export const clearTicketCache = () => cache.clear();
+
+/**
+ * Try a token before saving it: GET /api/rest/users/me returns the account
+ * the token belongs to. Only the account name comes back to the admin page.
+ */
+export async function testMantisToken(
+  token: string,
+  helpUrl: string
+): Promise<{ ok: true; user: string } | { ok: false; reason: string }> {
+  try {
+    const res = await fetch(`${baseUrl(helpUrl)}api/rest/users/me`, {
+      headers: { Authorization: token, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, reason: "Mantis rejected this token." };
+    if (!res.ok) return { ok: false, reason: `Mantis answered ${res.status}.` };
+    const me = (await res.json()) as { name?: string; real_name?: string };
+    return { ok: true, user: me.name || me.real_name || "unknown account" };
+  } catch {
+    return { ok: false, reason: `Couldn't reach ${baseUrl(helpUrl)} from the server.` };
+  }
+}
+
 export async function checkTicket(raw: string, helpUrl: string): Promise<TicketCheck> {
   const id = normalizeTicket(raw);
   if (!id) return { ok: false, code: "ticket_invalid" };
 
-  const token = process.env.MANTIS_API_TOKEN;
+  const token = mantisToken();
   if (!token) return { ok: true, id, verified: false };
 
   const key = `${baseUrl(helpUrl)}#${id}`;
@@ -81,7 +118,7 @@ export async function checkTicket(raw: string, helpUrl: string): Promise<TicketC
 export function ticketNoteLine(check: Extract<TicketCheck, { ok: true }>, helpUrl: string): string {
   const bits = [`Ticket #${displayTicket(check.id)}`];
   if (check.status) bits.push(`(${check.status})`);
-  if (!check.verified && process.env.MANTIS_API_TOKEN) bits.push("(not verified: tracker unreachable)");
+  if (!check.verified && mantisConfigured()) bits.push("(not verified: tracker unreachable)");
   if (check.summary) bits.push(`"${check.summary.slice(0, 120)}"`);
   return `${bits.join(" ")} ${ticketUrl(check.id, helpUrl)}`;
 }

@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import db, { adminCode, adminCodeEnabled, signupCode, Team, TeamEventType } from "@/lib/db";
+import db, { getSetting, adminCode, adminCodeEnabled, signupCode, Team, TeamEventType } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { AGENT_FRESH_MINUTES } from "@/lib/teams";
 import {
@@ -22,11 +22,13 @@ import {
   adminToggleTeamLiveSync,
   adminToggleTeamTicket,
   adminSaveTeamTicketUrl,
+  adminSaveMantisToken,
+  adminClearMantisToken,
   adminUpdateTeamEventType,
 } from "@/lib/actions";
 import ConfirmSubmit from "./ConfirmSubmit";
 import AutoSubmitCheckbox from "./AutoSubmitCheckbox";
-import { DEFAULT_TICKET_HELP_URL } from "@/lib/tickets";
+import { DEFAULT_TICKET_HELP_URL, mantisConfigured } from "@/lib/tickets";
 
 interface HostRow {
   id: number;
@@ -45,9 +47,9 @@ interface HostRow {
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; invited?: string; digest?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; invited?: string; digest?: string; mantis?: string }>;
 }) {
-  const { error, saved, invited, digest } = await searchParams;
+  const { error, saved, invited, digest, mantis } = await searchParams;
   const admin = await requireAdmin();
   const nowIso = DateTime.utc().toISO();
   const hosts = db
@@ -140,6 +142,19 @@ export default async function AdminPage({
       {invited && (
         <p className="rounded-md bg-green-50 border border-green-200 text-green-700 px-3 py-2 text-sm">
           Invitation sent to {invited}.
+        </p>
+      )}
+      {mantis && (
+        <p
+          className={`rounded-md border px-3 py-2 text-sm ${
+            mantis.startsWith("ok:")
+              ? "bg-green-50 border-green-200 text-green-700"
+              : "bg-red-50 border-red-200 text-red-700"
+          }`}
+        >
+          {mantis.startsWith("ok:")
+            ? `Mantis token saved. Connected as ${mantis.slice(3)}; ticket numbers are now checked against Mantis.`
+            : mantis}
         </p>
       )}
       {digest && (
@@ -518,12 +533,57 @@ export default async function AdminPage({
                     className="w-72 rounded-lg border border-gray-300 px-3 py-1 text-xs"
                   />
                   <button className="rounded-lg border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50">Save</button>
-                  <span className="text-xs text-gray-400">
-                    {process.env.MANTIS_API_TOKEN
-                      ? "Ticket numbers are checked against Mantis."
-                      : "Format check only: add MANTIS_API_TOKEN to the server .env to verify tickets exist."}
-                  </span>
                 </form>
+              )}
+              {team.require_ticket === 1 && (
+                <div className="ml-6 mt-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                  <p className="text-xs text-gray-600">
+                    {mantisConfigured() ? (
+                      <>
+                        <span className="font-medium text-green-700">Verifying tickets against Mantis</span>
+                        {getSetting("mantis_token_user") && <> as {getSetting("mantis_token_user")}</>}
+                        {getSetting("mantis_token_saved") && (
+                          <> · token saved {getSetting("mantis_token_saved")!.slice(0, 10)}</>
+                        )}
+                        . Paste a new token below to replace it.
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-amber-700">Format check only</span>: any well-formed
+                        number passes. Paste a Mantis API token (Mantis → My Account → API Tokens, from an
+                        account that can see all customer tickets) to refuse numbers that don&apos;t exist.
+                      </>
+                    )}
+                  </p>
+                  <form action={adminSaveMantisToken} className="mt-2 flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="help_url" value={team.ticket_help_url} />
+                    <input
+                      name="token"
+                      type="password"
+                      autoComplete="off"
+                      spellCheck={false}
+                      required
+                      aria-label="Mantis API token"
+                      placeholder={mantisConfigured() ? "New token (replaces the saved one)" : "Mantis API token"}
+                      className="w-72 rounded-lg border border-gray-300 bg-white px-3 py-1 font-mono text-xs"
+                    />
+                    <button className="rounded-lg bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700">
+                      Test &amp; save
+                    </button>
+                    {mantisConfigured() && getSetting("mantis_api_token") && (
+                      <button
+                        formAction={adminClearMantisToken}
+                        formNoValidate
+                        className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+                      >
+                        Remove token
+                      </button>
+                    )}
+                  </form>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Stored on the server only and never shown again here. Shared by every team.
+                  </p>
+                </div>
               )}
               <ul className="mt-2 space-y-1">
                 {members.map((m) => {
