@@ -394,7 +394,7 @@ export async function sendTeamDigestEmail(
         color: circadian(start.hour + start.minute / 60),
         time: `${timeOf(b.start_utc)} – ${timeOf(b.end_utc)}`,
         title: `${b.event_name} — ${b.guest_name}${b.guest_company ? ` (${b.guest_company})` : ""}`,
-        sub: `with ${b.host_name}`,
+        sub: `with ${b.host_name}${b.ticket_id ? `  ·  Ticket #${b.ticket_id.padStart(7, "0")}` : ""}`,
         tag: b.team_name ? `via ${b.team_name}` : undefined,
       };
     }),

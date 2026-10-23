@@ -882,6 +882,24 @@ export async function adminToggleTeamLiveSync(formData: FormData) {
   redirect("/dashboard/admin?saved=1");
 }
 
+export async function adminToggleTeamTicket(formData: FormData) {
+  await requireAdmin();
+  db.prepare("UPDATE teams SET require_ticket = 1 - require_ticket WHERE id = ?").run(
+    Number(formData.get("id"))
+  );
+  redirect("/dashboard/admin?saved=1");
+}
+
+export async function adminSaveTeamTicketUrl(formData: FormData) {
+  await requireAdmin();
+  const url = String(formData.get("url") || "").trim();
+  if (url && (!/^https:\/\/\S+$/.test(url) || url.length > 300)) {
+    redirect("/dashboard/admin?error=" + encodeURIComponent("The help desk URL must start with https://"));
+  }
+  db.prepare("UPDATE teams SET ticket_help_url = ? WHERE id = ?").run(url, Number(formData.get("id")));
+  redirect("/dashboard/admin?saved=1");
+}
+
 export async function adminAddTeamMember(formData: FormData) {
   await requireAdmin();
   const teamId = Number(formData.get("team_id"));

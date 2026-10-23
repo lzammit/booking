@@ -9,6 +9,7 @@ import { sendBookingEmails } from "@/lib/email";
 import { createOutlookEvent } from "@/lib/msgraph";
 import { createWebexMeeting } from "@/lib/webex";
 import { cleanText, clientIp, rateLimit } from "@/lib/ratelimit";
+import { checkTicket, ticketNoteLine } from "@/lib/tickets";
 
 const bookSchema = z.object({
   // Exactly one of the two: a host's event type, or a team's (round-robin).
@@ -22,6 +23,8 @@ const bookSchema = z.object({
   notes: z.string().max(2000).transform(cleanText).default(""),
   // Answers to the event type's booking questions, aligned by index.
   answers: z.array(z.string().max(1000).transform(cleanText)).max(10).default([]),
+  // Support ticket number, required by ticket-gated team pages.
+  ticketId: z.string().max(20).default(""),
   timezone: z.string().max(60).default("UTC"),
   locale: z.enum(["en", "fr"]).default("en"),
 });
@@ -66,6 +69,8 @@ export async function POST(req: NextRequest) {
   let host: Host;
   let eventType: EventType;
   let teamId: number | null = null;
+  let ticketId: string | null = null;
+  let ticketLine = "";
   if (input.teamEventTypeId) {
     // Team booking: assign the free member with the lightest schedule, then
     // proceed exactly like a direct booking on that member.
@@ -77,6 +82,18 @@ export async function POST(req: NextRequest) {
       : undefined;
     if (!tet || !team) {
       return NextResponse.json({ error: "Event type not found" }, { status: 404 });
+    }
+    // Enforced here, not just in the page: the gate step is a convenience.
+    if (team.require_ticket) {
+      const check = await checkTicket(input.ticketId, team.ticket_help_url);
+      if (!check.ok) {
+        return NextResponse.json(
+          { error: "A valid support ticket number is required.", code: check.code },
+          { status: 400 }
+        );
+      }
+      ticketId = check.id;
+      ticketLine = ticketNoteLine(check, team.ticket_help_url);
     }
     const member = await pickMemberForSlot(team, tet, startIso);
     if (!member) return slotTaken;
@@ -111,7 +128,7 @@ export async function POST(req: NextRequest) {
     .map((q, i) => (input.answers[i] ? `${q} → ${input.answers[i]}` : null))
     .filter(Boolean)
     .join("\n");
-  const notes = qa ? (input.notes ? `${qa}\n\n${input.notes}` : qa) : input.notes;
+  const notes = [ticketLine, qa, input.notes].filter(Boolean).join("\n\n");
 
   // Who booked, for the host's calendar entries. The guest's email is not
   // repeated here: it already travels as the event's attendee / invitee.
@@ -120,13 +137,14 @@ export async function POST(req: NextRequest) {
   const cancelToken = randomBytes(24).toString("hex");
   const res = db
     .prepare(
-      `INSERT INTO bookings (host_id, event_type_id, team_id, guest_name, guest_email, guest_company, guest_timezone, guest_locale, notes, start_utc, end_utc, cancel_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO bookings (host_id, event_type_id, team_id, ticket_id, guest_name, guest_email, guest_company, guest_timezone, guest_locale, notes, start_utc, end_utc, cancel_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       host.id,
       eventType.id,
       teamId,
+      ticketId,
       input.name,
       input.email,
       input.company,

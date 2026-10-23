@@ -209,6 +209,15 @@ function createDb() {
   if (!teamCols.some((c) => c.name === "require_live_sync")) {
     db.exec("ALTER TABLE teams ADD COLUMN require_live_sync INTEGER NOT NULL DEFAULT 1");
   }
+  if (!teamCols.some((c) => c.name === "require_ticket")) {
+    // Ticket gate: the team page asks for a support ticket number before it
+    // shows any time slots; ticket_help_url is the tracker clients open one in.
+    db.exec("ALTER TABLE teams ADD COLUMN require_ticket INTEGER NOT NULL DEFAULT 0");
+    db.exec("ALTER TABLE teams ADD COLUMN ticket_help_url TEXT NOT NULL DEFAULT ''");
+  }
+  if (!bookingCols.some((c) => c.name === "ticket_id")) {
+    db.exec("ALTER TABLE bookings ADD COLUMN ticket_id TEXT");
+  }
   if (!teamCols.some((c) => c.name === "digest_email")) {
     db.exec("ALTER TABLE teams ADD COLUMN digest_email TEXT NOT NULL DEFAULT ''");
     db.exec("ALTER TABLE teams ADD COLUMN digest_slack_webhook TEXT NOT NULL DEFAULT ''");
@@ -472,6 +481,8 @@ export interface Team {
   name: string;
   slug: string;
   require_live_sync: number;
+  require_ticket: number;
+  ticket_help_url: string;
   digest_email: string;
   digest_slack_webhook: string;
   digest_tz: string;
@@ -514,6 +525,7 @@ export interface Booking {
   host_id: number;
   event_type_id: number;
   team_id: number | null;
+  ticket_id: string | null;
   guest_name: string;
   guest_email: string;
   guest_company: string;

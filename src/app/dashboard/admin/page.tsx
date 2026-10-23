@@ -20,10 +20,13 @@ import {
   adminToggleAdminCode,
   adminToggleTeamEventType,
   adminToggleTeamLiveSync,
+  adminToggleTeamTicket,
+  adminSaveTeamTicketUrl,
   adminUpdateTeamEventType,
 } from "@/lib/actions";
 import ConfirmSubmit from "./ConfirmSubmit";
 import AutoSubmitCheckbox from "./AutoSubmitCheckbox";
+import { DEFAULT_TICKET_HELP_URL } from "@/lib/tickets";
 
 interface HostRow {
   id: number;
@@ -496,6 +499,32 @@ export default async function AdminPage({
                   label="Only round-robin members with live busy sync — when off, offline members are booked too, using the last calendar data they synced"
                 />
               </form>
+              <form action={adminToggleTeamTicket} className="mt-2">
+                <input type="hidden" name="id" value={team.id} />
+                <AutoSubmitCheckbox
+                  checked={team.require_ticket === 1}
+                  label="Require a support ticket number before booking (the page asks for it first and sends clients without one to the help desk)"
+                />
+              </form>
+              {team.require_ticket === 1 && (
+                <form action={adminSaveTeamTicketUrl} className="ml-6 mt-1 flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="id" value={team.id} />
+                  <label className="text-xs text-gray-500" htmlFor={`ticket-url-${team.id}`}>Help desk</label>
+                  <input
+                    id={`ticket-url-${team.id}`}
+                    name="url"
+                    defaultValue={team.ticket_help_url}
+                    placeholder={DEFAULT_TICKET_HELP_URL}
+                    className="w-72 rounded-lg border border-gray-300 px-3 py-1 text-xs"
+                  />
+                  <button className="rounded-lg border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50">Save</button>
+                  <span className="text-xs text-gray-400">
+                    {process.env.MANTIS_API_TOKEN
+                      ? "Ticket numbers are checked against Mantis."
+                      : "Format check only: add MANTIS_API_TOKEN to the server .env to verify tickets exist."}
+                  </span>
+                </form>
+              )}
               <ul className="mt-2 space-y-1">
                 {members.map((m) => {
                   const live = memberLive(m);

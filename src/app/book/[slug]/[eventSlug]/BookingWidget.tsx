@@ -34,6 +34,11 @@ interface Props {
    * misread → missed meetings).
    */
   initialTz?: string;
+  /**
+   * Ticket-gated team page: ask for a support ticket number before showing
+   * any times. helpUrl is where clients without a ticket go to open one.
+   */
+  ticketGate?: { helpUrl: string };
 }
 
 const DAWN: [number, number, number] = [240, 152, 126]; // 06:00
@@ -86,6 +91,7 @@ export default function BookingWidget({
   questions = [],
   rescheduleToken,
   initialTz,
+  ticketGate,
 }: Props) {
   const browserTz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -117,6 +123,11 @@ export default function BookingWidget({
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ticket, setTicket] = useState<string | null>(null);
+  const [ticketInput, setTicketInput] = useState("");
+  const [ticketError, setTicketError] = useState<string | null>(null);
+  const [ticketChecking, setTicketChecking] = useState(false);
+  const needsTicket = Boolean(ticketGate) && !rescheduleToken;
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState<{ start: string; host?: string } | null>(
     null
@@ -255,6 +266,7 @@ export default function BookingWidget({
                 email: fd.get("email"),
                 notes: fd.get("notes") || "",
                 answers: questions.map((_, i) => String(fd.get(`answer_${i}`) || "")),
+                ...(needsTicket && ticket ? { ticketId: ticket } : {}),
                 timezone: tz,
                 locale,
               }
@@ -262,6 +274,13 @@ export default function BookingWidget({
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === "ticket_invalid" || data.code === "ticket_not_found") {
+          // Back to the gate with the reason, rather than a dead end on the form.
+          setTicket(null);
+          setTicketError(t(locale, data.code));
+          setSelectedSlot(null);
+          return;
+        }
         const known = data.code === "slot_taken" || data.code === "rate_limited";
         throw new Error(known ? t(locale, data.code) : data.error || t(locale, "errGeneric"));
       }
@@ -327,7 +346,119 @@ export default function BookingWidget({
   const consentLinkClass =
     "rounded-sm text-ink underline underline-offset-4 decoration-ink/40 hover:decoration-ink";
 
+  async function submitTicket(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const raw = ticketInput.trim();
+    // Same rule as the server: digits, optionally "#" and leading zeros.
+    if (!/^#?\s*\d{1,9}$/.test(raw) || !/[1-9]/.test(raw)) {
+      setTicketError(t(locale, "ticket_invalid"));
+      return;
+    }
+    setTicketChecking(true);
+    setTicketError(null);
+    try {
+      const res = await fetch(
+        `/api/ticket-check?teamEventTypeId=${teamEventTypeId}&ticket=${encodeURIComponent(raw)}`
+      );
+      const data = await res.json();
+      if (data.ok) {
+        setTicket(data.ticket);
+      } else {
+        setTicketError(
+          data.code === "ticket_invalid" || data.code === "ticket_not_found" || data.code === "rate_limited"
+            ? t(locale, data.code)
+            : t(locale, "errGeneric")
+        );
+      }
+    } catch {
+      setTicketError(t(locale, "errGeneric"));
+    } finally {
+      setTicketChecking(false);
+    }
+  }
+
+  if (needsTicket && !ticket) {
+    const helpUrl = ticketGate!.helpUrl;
+    const helpHost = helpUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const [before, after] = t(locale, "ticketNone").split("{link}");
+    return (
+      <div className="max-w-md rounded-2xl border border-ink/10 bg-white p-8">
+        <div className="day-arc w-full" />
+        <h2 className="mt-6 text-2xl font-semibold text-ink">{t(locale, "ticketTitle")}</h2>
+        <p className="mt-2 text-sm text-ink/70">{t(locale, "ticketIntro")}</p>
+        <form onSubmit={submitTicket} className="mt-6 space-y-3" noValidate>
+          <div>
+            <label htmlFor={fieldId("ticket")} className={labelClass}>
+              {t(locale, "ticketLabel")}
+            </label>
+            <input
+              id={fieldId("ticket")}
+              name="ticket"
+              inputMode="numeric"
+              autoComplete="off"
+              required
+              aria-required="true"
+              aria-invalid={ticketError ? true : undefined}
+              aria-describedby={ticketError ? fieldId("ticket-error") : fieldId("ticket-help")}
+              maxLength={12}
+              value={ticketInput}
+              onChange={(e) => setTicketInput(e.target.value)}
+              placeholder={t(locale, "ticketPlaceholder")}
+              className={`mt-1 font-mono tabular-nums ${inputClass}`}
+            />
+          </div>
+          <div role="alert" aria-live="assertive">
+            {ticketError && (
+              <p id={fieldId("ticket-error")} className="text-sm text-red-700">
+                {ticketError}
+              </p>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={ticketChecking || !ticketInput.trim()}
+            className="w-full rounded-lg bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:opacity-90 disabled:opacity-50"
+          >
+            {ticketChecking ? t(locale, "ticketChecking") : t(locale, "ticketContinue")}
+          </button>
+        </form>
+        <p id={fieldId("ticket-help")} className="mt-5 border-t border-ink/10 pt-4 text-sm text-ink/70">
+          {before}
+          <a
+            href={helpUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-ink underline underline-offset-4 decoration-ink/40 hover:decoration-ink"
+          >
+            {helpHost}
+          </a>
+          {after}
+        </p>
+      </div>
+    );
+  }
+
+  const ticketChip = needsTicket && ticket && (
+    <p className="mb-6 flex items-center gap-2 font-mono text-xs uppercase tracking-[0.15em] text-ink/70">
+      <span className="rounded-full border border-ink/15 bg-white px-2.5 py-1 normal-case tracking-normal text-ink">
+        {t(locale, "ticketChip", { id: ticket })}
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          setTicket(null);
+          setSelectedSlot(null);
+        }}
+        className="rounded-sm normal-case tracking-normal underline underline-offset-4 decoration-ink/40 hover:text-ink hover:decoration-ink"
+      >
+        {t(locale, "ticketChange")}
+      </button>
+    </p>
+  );
+
   return (
+    <>
+    {ticketChip}
     <div className="grid gap-10 md:grid-cols-[1fr_280px]">
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -675,5 +806,6 @@ export default function BookingWidget({
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -32,6 +32,7 @@ export async function generateMetadata({
 import { teamBySlug, teamMembers } from "@/lib/teams";
 import { pickLocale, t } from "@/lib/i18n";
 import SiteFooter from "@/app/SiteFooter";
+import { DEFAULT_TICKET_HELP_URL } from "@/lib/tickets";
 import BookingWidget from "@/app/book/[slug]/[eventSlug]/BookingWidget";
 
 export default async function TeamEventBookingPage({
@@ -89,6 +90,11 @@ export default async function TeamEventBookingPage({
             hostTimezone={teamTz}
             locale={locale}
             questions={questionList(eventType.questions)}
+            ticketGate={
+              team.require_ticket
+                ? { helpUrl: team.ticket_help_url || DEFAULT_TICKET_HELP_URL }
+                : undefined
+            }
           />
         </div>
       </main>

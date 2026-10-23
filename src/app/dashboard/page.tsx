@@ -8,6 +8,7 @@ import {
   updateSlug,
 } from "@/lib/actions";
 import ConfirmSubmit from "./admin/ConfirmSubmit";
+import { displayTicket, ticketUrl } from "@/lib/tickets";
 
 export default async function DashboardPage({
   searchParams,
@@ -20,22 +21,22 @@ export default async function DashboardPage({
   const nowIso = DateTime.utc().toISO();
   const upcoming = db
     .prepare(
-      `SELECT b.*, e.name AS event_name, t.name AS team_name FROM bookings b
+      `SELECT b.*, e.name AS event_name, t.name AS team_name, t.ticket_help_url AS team_help_url FROM bookings b
        JOIN event_types e ON e.id = b.event_type_id
        LEFT JOIN teams t ON t.id = b.team_id
        WHERE b.host_id = ? AND b.status = 'confirmed' AND b.end_utc > ?
        ORDER BY b.start_utc LIMIT 50`
     )
-    .all(host.id, nowIso) as (Booking & { event_name: string; team_name: string | null })[];
+    .all(host.id, nowIso) as (Booking & { event_name: string; team_name: string | null; team_help_url: string | null })[];
   const past = db
     .prepare(
-      `SELECT b.*, e.name AS event_name, t.name AS team_name FROM bookings b
+      `SELECT b.*, e.name AS event_name, t.name AS team_name, t.ticket_help_url AS team_help_url FROM bookings b
        JOIN event_types e ON e.id = b.event_type_id
        LEFT JOIN teams t ON t.id = b.team_id
        WHERE b.host_id = ? AND NOT (b.status = 'confirmed' AND b.end_utc > ?)
        ORDER BY b.start_utc DESC LIMIT 20`
     )
-    .all(host.id, nowIso) as (Booking & { event_name: string; team_name: string | null })[];
+    .all(host.id, nowIso) as (Booking & { event_name: string; team_name: string | null; team_help_url: string | null })[];
   const eventTypeCount = (
     db.prepare("SELECT COUNT(*) AS c FROM event_types WHERE host_id = ? AND active = 1").get(host.id) as { c: number }
   ).c;
@@ -135,6 +136,17 @@ export default async function DashboardPage({
                       <span className="ml-2 rounded-full bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs font-medium text-purple-700">
                         via {b.team_name}
                       </span>
+                    )}
+                    {b.ticket_id && (
+                      <a
+                        href={ticketUrl(b.ticket_id, b.team_help_url ?? "")}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 rounded-full border border-gray-300 bg-white px-2 py-0.5 font-mono text-xs font-medium text-gray-700 hover:border-gray-500"
+                        title="Open the ticket in Mantis"
+                      >
+                        #{displayTicket(b.ticket_id)}
+                      </a>
                     )}
                   </div>
                   <div className="text-sm text-gray-500">

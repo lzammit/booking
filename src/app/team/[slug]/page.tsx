@@ -71,6 +71,9 @@ export default async function TeamPage({
         </h1>
         <div className="day-arc mt-6 w-24" />
         <p className="mt-6 text-ink/70">{t(locale, "teamIntro")}</p>
+        {team.require_ticket === 1 && (
+          <p className="mt-2 text-sm text-ink/70">{t(locale, "ticketRequiredNote")}</p>
+        )}
 
         <ul className="mt-10 space-y-3">
           {eventTypes.map((et) => (

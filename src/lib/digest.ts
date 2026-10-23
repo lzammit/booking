@@ -2,6 +2,7 @@ import { DateTime } from "luxon";
 import db, { Booking, getSetting, setSetting, Team } from "./db";
 import { circadian, sendTeamDigestEmail } from "./email";
 import { postSlackMessage, slackEscape } from "./slack";
+import { displayTicket, ticketUrl } from "./tickets";
 
 export type DigestBooking = Booking & {
   event_name: string;
@@ -105,7 +106,7 @@ export async function runTeamDigests(force = false, onlyTeamId?: number): Promis
                     type: "mrkdwn",
                     text:
                       `*${timeOf(b.start_utc)} – ${timeOf(b.end_utc)}*   ${slackEscape(b.event_name)} — *${slackEscape(b.guest_name)}*${b.guest_company ? ` (${slackEscape(b.guest_company)})` : ""}\n` +
-                      `_with ${slackEscape(b.host_name)}_${b.team_name ? `  ·  via ${slackEscape(b.team_name)}` : ""}${b.webex_link ? `  ·  <${b.webex_link}|Join>` : ""}`,
+                      `_with ${slackEscape(b.host_name)}_${b.ticket_id ? `  ·  <${ticketUrl(b.ticket_id, team.ticket_help_url)}|Ticket #${displayTicket(b.ticket_id)}>` : ""}${b.team_name ? `  ·  via ${slackEscape(b.team_name)}` : ""}${b.webex_link ? `  ·  <${b.webex_link}|Join>` : ""}`,
                   },
                 },
               ],
