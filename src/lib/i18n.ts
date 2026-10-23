@@ -33,7 +33,7 @@ const en = {
   teamAssigned: "Your meeting will be with {name}.",
   // Ticket gate (team pages that require a support ticket)
   ticketTitle: "Start with your support ticket",
-  ticketIntro: "These meetings are for open support cases. Enter your ticket number to see the available times.",
+  ticketIntro: "These meetings are for support cases. Enter your ticket number to see the available times.",
   ticketLabel: "Ticket number",
   ticketPlaceholder: "e.g. 0012345",
   ticketContinue: "Continue",
@@ -173,7 +173,7 @@ const fr: Record<MessageKey, string> = {
   teamMatched: "Un membre disponible de l’équipe vous sera attribué.",
   teamAssigned: "Votre réunion sera avec {name}.",
   ticketTitle: "Commencez par votre billet de support",
-  ticketIntro: "Ces rencontres sont réservées aux dossiers de support ouverts. Entrez votre numéro de billet pour voir les plages disponibles.",
+  ticketIntro: "Ces rencontres sont réservées aux dossiers de support. Entrez votre numéro de billet pour voir les plages disponibles.",
   ticketLabel: "Numéro de billet",
   ticketPlaceholder: "ex. 0012345",
   ticketContinue: "Continuer",
