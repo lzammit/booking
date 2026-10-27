@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import db, {
+  BookingInvitee,
   adminCode,
   adminCodeEnabled,
   Booking,
@@ -22,6 +23,7 @@ import {
   sendAdminPromotionEmail,
   sendBookingEmails,
   sendInviteEmail,
+  sendInviteeEmail,
   sendPasswordResetEmail,
 } from "./email";
 import { clearIcsFeedData, refreshIcsFeed } from "./icsfeed";
@@ -676,6 +678,87 @@ export async function hostFreeReschedule(formData: FormData) {
     );
   }
   redirect("/dashboard?saved=1");
+}
+
+/**
+ * "Invite someone": add a colleague to one of the host's upcoming bookings.
+ * A booking-account holder gets it through their agent/feed (immune to
+ * Exchange rewriting invites); anyone else gets an email invite addressed
+ * to them. Either way they follow reschedules and cancellations.
+ */
+export async function inviteToBooking(formData: FormData) {
+  const host = await requireHost();
+  const id = Number(formData.get("id"));
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const fail = (msg: string) => redirect("/dashboard?error=" + encodeURIComponent(msg));
+
+  const booking = db
+    .prepare("SELECT * FROM bookings WHERE id = ? AND host_id = ? AND status = 'confirmed' AND end_utc > ?")
+    .get(id, host.id, new Date().toISOString()) as Booking | undefined;
+  if (!booking) fail("Booking not found");
+  if (!z.string().email().max(200).safeParse(email).success) fail("Enter a valid email address");
+  if (email === host.email.toLowerCase()) fail("That's you: you're already the host");
+  if (email === booking!.guest_email.toLowerCase()) fail("That's the guest: they already have the invite");
+  const active = db
+    .prepare("SELECT email FROM booking_invitees WHERE booking_id = ? AND removed_at IS NULL")
+    .all(booking!.id) as { email: string }[];
+  if (active.some((a) => a.email === email)) fail(`${email} is already invited`);
+  if (active.length >= 10) fail("Up to 10 people per meeting");
+
+  const account = db
+    .prepare("SELECT id, name FROM hosts WHERE lower(email) = ?")
+    .get(email) as { id: number; name: string } | undefined;
+  // Re-inviting someone who was removed reuses their row, so their agent's
+  // event comes back instead of a second one appearing.
+  const previous = db
+    .prepare("SELECT id FROM booking_invitees WHERE booking_id = ? AND email = ? AND removed_at IS NOT NULL")
+    .get(booking!.id, email) as { id: number } | undefined;
+  let inviteeId: number;
+  if (previous) {
+    db.prepare("UPDATE booking_invitees SET removed_at = NULL, host_id = ?, invited_by = ? WHERE id = ?")
+      .run(account?.id ?? null, host.id, previous.id);
+    inviteeId = previous.id;
+  } else {
+    inviteeId = Number(
+      db
+        .prepare("INSERT INTO booking_invitees (booking_id, email, name, host_id, invited_by) VALUES (?, ?, ?, ?, ?)")
+        .run(booking!.id, email, account?.name ?? "", account?.id ?? null, host.id).lastInsertRowid
+    );
+  }
+  const invitee = db.prepare("SELECT * FROM booking_invitees WHERE id = ?").get(inviteeId) as BookingInvitee;
+  const eventType = db.prepare("SELECT * FROM event_types WHERE id = ?").get(booking!.event_type_id) as EventType;
+  await sendInviteeEmail(booking!, host, eventType, invitee, "invited");
+
+  revalidatePath("/dashboard");
+  redirect(
+    "/dashboard?saved=" +
+      encodeURIComponent(
+        account
+          ? `${account.name} is invited. It goes on their calendar through BookingAgent.`
+          : `Invitation sent to ${email}.`
+      )
+  );
+}
+
+export async function uninviteFromBooking(formData: FormData) {
+  const host = await requireHost();
+  const inviteeId = Number(formData.get("invitee_id"));
+  const row = db
+    .prepare(
+      `SELECT i.* FROM booking_invitees i JOIN bookings b ON b.id = i.booking_id
+       WHERE i.id = ? AND b.host_id = ? AND i.removed_at IS NULL`
+    )
+    .get(inviteeId, host.id) as BookingInvitee | undefined;
+  if (row) {
+    db.prepare("UPDATE booking_invitees SET removed_at = datetime('now') WHERE id = ?").run(row.id);
+    const booking = db.prepare("SELECT * FROM bookings WHERE id = ?").get(row.booking_id) as Booking;
+    const eventType = db.prepare("SELECT * FROM event_types WHERE id = ?").get(booking.event_type_id) as EventType;
+    if (booking.status === "confirmed" && booking.end_utc > new Date().toISOString()) {
+      await sendInviteeEmail(booking, host, eventType, row, "uninvited");
+    }
+  }
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
 }
 
 export async function deletePastBooking(formData: FormData) {

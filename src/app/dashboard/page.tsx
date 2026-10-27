@@ -5,6 +5,8 @@ import {
   cancelBookingAsHost,
   deletePastBooking,
   reassignTeamBooking,
+  inviteToBooking,
+  uninviteFromBooking,
   updateSlug,
 } from "@/lib/actions";
 import ConfirmSubmit from "./admin/ConfirmSubmit";
@@ -42,6 +44,27 @@ export default async function DashboardPage({
   ).c;
 
   // Hand-off targets: other members of each team this host has bookings for.
+  // People the host invited to each upcoming booking ("Invite someone").
+  const inviteesByBooking = new Map<number, { id: number; email: string; name: string; host_id: number | null }[]>();
+  if (upcoming.length) {
+    const rows = db
+      .prepare(
+        `SELECT id, booking_id, email, name, host_id FROM booking_invitees
+         WHERE removed_at IS NULL AND booking_id IN (${upcoming.map(() => "?").join(",")})
+         ORDER BY id`
+      )
+      .all(...upcoming.map((b) => b.id)) as { id: number; booking_id: number; email: string; name: string; host_id: number | null }[];
+    for (const r of rows) {
+      const list = inviteesByBooking.get(r.booking_id) ?? [];
+      list.push(r);
+      inviteesByBooking.set(r.booking_id, list);
+    }
+  }
+  // Booking accounts, to suggest colleagues in the invite field.
+  const colleagues = db
+    .prepare("SELECT name, email FROM hosts WHERE id != ? ORDER BY name")
+    .all(host.id) as { name: string; email: string }[];
+
   const teamIds = [...new Set(upcoming.map((b) => b.team_id).filter(Boolean))] as number[];
   const teammates = new Map<number, { id: number; name: string }[]>();
   for (const tid of teamIds) {
@@ -91,7 +114,7 @@ export default async function DashboardPage({
       )}
       {saved && (
         <p className="rounded-md bg-green-50 border border-green-200 text-green-700 px-3 py-2 text-sm">
-          Saved.
+          {saved === "1" ? "Saved." : saved}
         </p>
       )}
 
@@ -156,6 +179,46 @@ export default async function DashboardPage({
                     )}{" "}
                     · {b.guest_email}
                     {b.notes && <> · “{b.notes}”</>}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                    {(inviteesByBooking.get(b.id) ?? []).map((inv) => (
+                      <span
+                        key={inv.id}
+                        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 py-0.5 pl-2 pr-1 text-gray-700"
+                        title={inv.host_id ? `${inv.email} · on their calendar through BookingAgent` : `${inv.email} · email invite`}
+                      >
+                        {inv.name || inv.email}
+                        <form action={uninviteFromBooking}>
+                          <input type="hidden" name="invitee_id" value={inv.id} />
+                          <button
+                            className="rounded-full px-1 text-gray-400 hover:bg-gray-200 hover:text-red-600"
+                            aria-label={`Remove ${inv.name || inv.email} from this meeting`}
+                          >
+                            ×
+                          </button>
+                        </form>
+                      </span>
+                    ))}
+                    <details className="inline-block">
+                      <summary className="cursor-pointer list-none rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-gray-500 hover:border-gray-500 hover:text-gray-800">
+                        + Invite someone
+                      </summary>
+                      <form action={inviteToBooking} className="mt-1.5 flex items-center gap-1.5">
+                        <input type="hidden" name="id" value={b.id} />
+                        <input
+                          name="email"
+                          type="email"
+                          required
+                          list="colleague-emails"
+                          placeholder="colleague@akamai.com"
+                          aria-label="Email of the person to invite"
+                          className="w-56 rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                        />
+                        <button className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">
+                          Invite
+                        </button>
+                      </form>
+                    </details>
                   </div>
                 </div>
                 {b.team_id && (teammates.get(b.team_id)?.length ?? 0) > 0 && (
@@ -235,6 +298,13 @@ export default async function DashboardPage({
           </ul>
         </section>
       )}
+      <datalist id="colleague-emails">
+        {colleagues.map((c) => (
+          <option key={c.email} value={c.email}>
+            {c.name}
+          </option>
+        ))}
+      </datalist>
     </main>
   );
 }

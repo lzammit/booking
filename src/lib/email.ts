@@ -1,6 +1,6 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type SendMailOptions } from "nodemailer";
 import { DateTime } from "luxon";
-import { Booking, EventType, Host } from "./db";
+import db, { Booking, BookingInvitee, EventType, Host } from "./db";
 import { Locale, LOCALES, t as tr } from "./i18n";
 
 /**
@@ -41,11 +41,13 @@ function buildIcs(
   method: "REQUEST" | "CANCEL",
   summary: string,
   organizer: IcsParty,
-  attendee: IcsParty
+  attendee: IcsParty,
+  opts: { cancelLink?: boolean; sequenceBump?: number } = {}
 ): string {
   const fmt = (iso: string) =>
     DateTime.fromISO(iso, { zone: "utc" }).toFormat("yyyyMMdd'T'HHmmss'Z'");
-  const cancelUrl = `${APP_URL}/cancel/${booking.cancel_token}`;
+  // The cancel link carries the guest's power to cancel: invitees never get it.
+  const cancelLine = opts.cancelLink === false ? "" : `Cancel: ${APP_URL}/cancel/${booking.cancel_token}`;
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -58,7 +60,7 @@ function buildIcs(
     `DTEND:${fmt(booking.end_utc)}`,
     `SUMMARY:${icsEscape(summary)}`,
     `DESCRIPTION:${icsEscape(
-      `${booking.notes ? booking.notes + "\n\n" : ""}${booking.webex_link ? `Join Webex: ${booking.webex_link}\n\n` : ""}Cancel: ${cancelUrl}`
+      `${booking.notes ? booking.notes + "\n\n" : ""}${booking.webex_link ? `Join Webex: ${booking.webex_link}\n\n` : ""}${cancelLine}`.trim()
     )}`,
     ...(booking.webex_link ? [`LOCATION:${icsEscape(booking.webex_link)}`, `URL:${booking.webex_link}`] : []),
     `ORGANIZER;CN=${icsEscape(organizer.name)}:mailto:${organizer.email}`,
@@ -66,7 +68,7 @@ function buildIcs(
     "TRANSP:OPAQUE",
     `STATUS:${method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
     // Same UID + higher SEQUENCE = calendar clients move the existing event.
-    `SEQUENCE:${method === "CANCEL" ? booking.sequence + 1 : booking.sequence}`,
+    `SEQUENCE:${(method === "CANCEL" ? booking.sequence + 1 : booking.sequence) + (opts.sequenceBump ?? 0)}`,
     "END:VEVENT",
     "END:VCALENDAR",
   ];
@@ -544,5 +546,88 @@ export async function sendBookingEmails(
   ]);
   for (const r of results) {
     if (r.status === "rejected") console.error("Email send failed:", r.reason);
+  }
+  if (kind !== "confirmed") {
+    const invitees = db
+      .prepare("SELECT * FROM booking_invitees WHERE booking_id = ? AND removed_at IS NULL")
+      .all(booking.id) as BookingInvitee[];
+    for (const inv of invitees) {
+      await sendInviteeEmail(booking, host, eventType, inv, kind);
+    }
+  }
+}
+
+/**
+ * Mail to someone the host invited to a booking.
+ *
+ * Booking-account holders get a plain notice with NO calendar data: the
+ * meeting reaches their calendar through their agent / bookings feed, and an
+ * .ics here would only make a duplicate (or arrive mangled by Exchange).
+ * Everyone else gets a real invite addressed to them (REQUEST, or CANCEL
+ * when the meeting is cancelled or they are removed from it).
+ */
+export async function sendInviteeEmail(
+  booking: Booking,
+  host: Host,
+  eventType: EventType,
+  invitee: BookingInvitee,
+  kind: "invited" | "rescheduled" | "cancelled" | "uninvited"
+): Promise<boolean> {
+  const t = transport();
+  if (!t) return false;
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!;
+  const fromEmail = from.match(/<([^>]+)>/)?.[1] ?? from;
+  const tz = invitee.host_id
+    ? ((db.prepare("SELECT timezone FROM hosts WHERE id = ?").get(invitee.host_id) as { timezone: string } | undefined)?.timezone ?? host.timezone)
+    : host.timezone;
+  const when = DateTime.fromISO(booking.start_utc, { zone: "utc" })
+    .setZone(tz)
+    .toFormat("cccc, LLLL d yyyy 'at' h:mm a (ZZZZ)");
+  const who = booking.guest_company ? `${booking.guest_name} (${booking.guest_company})` : booking.guest_name;
+  const summary = `${eventType.name} — ${who}`;
+  const join = booking.webex_link ? `\nJoin: ${booking.webex_link}` : "";
+  const hi = invitee.name ? `Hi ${invitee.name.split(" ")[0]},` : "Hi,";
+
+  const lead = {
+    invited: `${host.name} invited you to a meeting with ${who}.`,
+    rescheduled: `The meeting with ${who} that ${host.name} invited you to has moved.`,
+    cancelled: `The meeting with ${who} that ${host.name} invited you to was cancelled.`,
+    uninvited: `${host.name} removed you from the meeting with ${who}. You don't need to attend.`,
+  }[kind];
+  const subject = {
+    invited: `Invitation: ${summary} — ${when}`,
+    rescheduled: `Updated: ${summary} — now ${when}`,
+    cancelled: `Cancelled: ${summary}`,
+    uninvited: `Removed: ${summary}`,
+  }[kind];
+  const calendarNote = invitee.host_id
+    ? kind === "invited" || kind === "rescheduled"
+      ? "\n\nIt's on your calendar through BookingAgent (and your bookings feed), and it will follow any further change."
+      : "\n\nBookingAgent removes it from your calendar on its next sync."
+    : "";
+  const text = `${hi}\n\n${lead}\n\nWhat: ${eventType.name} (${eventType.duration_min} min)\nWhen: ${when}${kind === "cancelled" || kind === "uninvited" ? "" : join}${calendarNote}\n`;
+
+  const mail: SendMailOptions = { from, to: invitee.email, subject, text };
+  if (!invitee.host_id) {
+    const method = kind === "cancelled" || kind === "uninvited" ? "CANCEL" : "REQUEST";
+    // A removal is a cancel for this attendee only; the meeting itself stands,
+    // so it can't reuse the booking's own cancel sequence number.
+    const ics = buildIcs(
+      booking,
+      method,
+      summary,
+      { name: "Booking", email: fromEmail },
+      { name: invitee.name || invitee.email, email: invitee.email },
+      { cancelLink: false, sequenceBump: kind === "uninvited" ? 1 : 0 }
+    );
+    mail.alternatives = [{ contentType: `text/calendar; charset=utf-8; method=${method}`, content: ics }];
+    mail.headers = { "Content-Class": "urn:content-classes:calendarmessage" };
+  }
+  try {
+    await t.sendMail(mail);
+    return true;
+  } catch (err) {
+    console.error("Invitee email failed:", err);
+    return false;
   }
 }

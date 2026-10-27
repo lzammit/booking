@@ -135,6 +135,23 @@ function createDb() {
       questions TEXT NOT NULL DEFAULT '', -- one booking question per line
       UNIQUE(team_id, slug)
     );
+    CREATE TABLE IF NOT EXISTS booking_invitees (
+      -- Colleagues the host added to a booking ("Invite someone"). host_id is
+      -- set when the email belongs to a booking account: the meeting then
+      -- reaches them through their agent/feed, not a (mangled) email invite.
+      -- Uninviting sets removed_at instead of deleting, so the agent keeps
+      -- seeing the booking as cancelled and removes the calendar event.
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+      email TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      host_id INTEGER REFERENCES hosts(id) ON DELETE SET NULL,
+      invited_by INTEGER REFERENCES hosts(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      removed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_booking_invitees_booking ON booking_invitees(booking_id);
+    CREATE INDEX IF NOT EXISTS idx_booking_invitees_host ON booking_invitees(host_id);
     CREATE TABLE IF NOT EXISTS vacations (
       -- Whole-day unavailability ranges (inclusive, host-local dates).
       -- Blocks new bookings only; existing ones must be cancelled/reassigned.
@@ -502,6 +519,17 @@ export interface TeamEventType {
   active: number;
   meeting_url: string;
   questions: string;
+}
+
+export interface BookingInvitee {
+  id: number;
+  booking_id: number;
+  email: string;
+  name: string;
+  host_id: number | null;
+  invited_by: number | null;
+  created_at: string;
+  removed_at: string | null;
 }
 
 export interface Vacation {

@@ -48,6 +48,23 @@ export async function GET(
        ORDER BY b.start_utc`
     )
     .all(host.id, from) as (Booking & { event_type_name: string })[];
+  // Plus meetings a colleague invited this host to (no cancel link for those).
+  const invited = db
+    .prepare(
+      `SELECT b.*, et.name AS event_type_name, h.name AS inviter_name
+       FROM booking_invitees i
+       JOIN bookings b ON b.id = i.booking_id
+       JOIN event_types et ON et.id = b.event_type_id
+       JOIN hosts h ON h.id = b.host_id
+       WHERE i.host_id = ? AND i.removed_at IS NULL AND b.host_id != ?
+         AND b.status = 'confirmed' AND b.end_utc >= ?
+       ORDER BY b.start_utc`
+    )
+    .all(host.id, host.id, from) as (Booking & { event_type_name: string; inviter_name: string })[];
+  const feedRows = [
+    ...rows.map((b) => ({ ...b, inviter_name: null as string | null })),
+    ...invited,
+  ];
 
   const fmt = (iso: string) =>
     DateTime.fromISO(iso, { zone: "utc" }).toFormat("yyyyMMdd'T'HHmmss'Z'");
@@ -63,15 +80,19 @@ export async function GET(
     "X-PUBLISHED-TTL:PT30M",
     "REFRESH-INTERVAL;VALUE=DURATION:PT30M",
   ];
-  for (const b of rows) {
-    const summary = b.guest_company
-      ? `${b.guest_company} - ${b.guest_name}`
-      : `${b.event_type_name} - ${b.guest_name}`;
+  for (const b of feedRows) {
+    const summary =
+      (b.guest_company
+        ? `${b.guest_company} - ${b.guest_name}`
+        : `${b.event_type_name} - ${b.guest_name}`) +
+      (b.inviter_name ? ` (with ${b.inviter_name})` : "");
     const description =
       `${b.guest_name} <${b.guest_email}>` +
       (b.notes ? `\n${b.notes}` : "") +
       (b.webex_link ? `\nJoin Webex: ${b.webex_link}` : "") +
-      `\nCancel: ${APP_URL}/cancel/${b.cancel_token}`;
+      (b.inviter_name
+        ? `\nInvited by ${b.inviter_name}`
+        : `\nCancel: ${APP_URL}/cancel/${b.cancel_token}`);
     lines.push(
       "BEGIN:VEVENT",
       `UID:booking-${b.id}@${uidHost}`,
