@@ -289,7 +289,14 @@ export default async function AdminPage({
           return (
             <section key={h.id} className="rounded-xl border border-gray-200 p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold">{h.name}</span>
+                <a
+                  href={`/book/${h.slug}`}
+                  target="_blank"
+                  title={`Open ${h.name}'s booking page (/book/${h.slug})`}
+                  className="font-semibold underline-offset-4 hover:underline"
+                >
+                  {h.name}
+                </a>
                 <span className="text-sm text-gray-500">{h.email}</span>
                 {h.is_admin === 1 && (
                   <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-medium text-blue-700">
