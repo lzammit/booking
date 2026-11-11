@@ -65,6 +65,7 @@ export default async function AdminPage({
 
   const teams = db.prepare("SELECT * FROM teams ORDER BY name").all() as Team[];
   interface MemberRow {
+    slug: string;
     id: number;
     name: string;
     email: string;
@@ -90,7 +91,7 @@ export default async function AdminPage({
       team.id,
       db
         .prepare(
-          `SELECT h.id, h.name, h.email, h.ics_url,
+          `SELECT h.id, h.name, h.email, h.slug, h.ics_url,
              (SELECT MAX(a.last_sync) FROM agent_syncs a WHERE a.host_id = h.id) AS last_sync
            FROM hosts h
            JOIN team_members m ON m.host_id = h.id
@@ -594,9 +595,14 @@ export default async function AdminPage({
                         aria-hidden
                         className={`h-2 w-2 rounded-full ${live ? "bg-green-500" : "bg-red-500"}`}
                       />
-                      <span className={live ? "font-medium text-green-700" : "font-medium text-red-600"}>
+                      <a
+                        href={`/book/${m.slug}`}
+                        target="_blank"
+                        title={`Open ${m.name}'s booking page (/book/${m.slug})`}
+                        className={`font-medium underline-offset-4 hover:underline ${live ? "text-green-700" : "text-red-600"}`}
+                      >
                         {m.name}
-                      </span>
+                      </a>
                       <span className="text-gray-400">{m.email}</span>
                       {!live &&
                         (team.require_live_sync ? (
